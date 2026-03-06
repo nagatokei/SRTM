@@ -38,12 +38,20 @@
     <hr style="border: 0; border-top: 1px solid #444; margin: 15px 0;">
     
     <div class="control-group">
-      <label>Blink Sensitivity: <span id="v_blink">1.5</span></label>
+      <label>まばたき感度: <span id="v_blink">1.5</span></label>
       <input type="range" id="s_blink" min="1.0" max="3.0" step="0.1" value="1.5">
     </div>
     <div class="control-group">
-      <label>Height Offset: <span id="v_h">0.0</span></label>
+      <label>高さ調整: <span id="v_h">0.0</span></label>
       <input type="range" id="s_h" min="-0.5" max="0.5" step="0.01" value="0.0">
+    </div>
+    <div class="control-group">
+      <label>左腕の角度: <span id="v_l">0</span>°</label>
+      <input type="range" id="s_l" min="-90" max="90" step="1" value="0">
+    </div>
+    <div class="control-group">
+      <label>右腕の角度: <span id="v_r">0</span>°</label>
+      <input type="range" id="s_r" min="-90" max="90" step="1" value="0">
     </div>
   </div>
 
@@ -69,10 +77,16 @@
     const video = document.getElementById("input_video");
     const connStatus = document.getElementById("conn_status");
     const vrmInput = document.getElementById("vrm_file");
+    
+    // スライダーと表示用要素の取得
+    const s_h = document.getElementById("s_h");
+    const s_l = document.getElementById("s_l");
+    const s_r = document.getElementById("s_r");
+    const s_blink = document.getElementById("s_blink");
+
     let currentVrm, faceLandmarker, lastVideoTime = -1;
     let peer, dataConnection, currentVrmUrl = null;
 
-    // VRM読み込み処理
     vrmInput.onchange = (e) => {
       const file = e.target.files[0];
       if (!file) return;
@@ -127,10 +141,30 @@
       if (video.currentTime !== lastVideoTime) {
         lastVideoTime = video.currentTime;
         const result = faceLandmarker ? faceLandmarker.detectForVideo(video, performance.now()) : null;
-        const v = { h: parseFloat(s_h.value), la: 0, ra: 0, b: parseFloat(s_blink.value), s: {}, r: null };
         
+        // 数値データの準備
+        const hVal = parseFloat(s_h.value);
+        const lVal = parseFloat(s_l.value);
+        const rVal = parseFloat(s_r.value);
+        const bVal = parseFloat(s_blink.value);
+
+        const v = { h: hVal, la: lVal, ra: rVal, b: bVal, s: {}, r: null };
+        
+        // 数値表示の更新
+        document.getElementById("v_h").innerText = hVal.toFixed(2);
+        document.getElementById("v_l").innerText = lVal;
+        document.getElementById("v_r").innerText = rVal;
+        document.getElementById("v_blink").innerText = bVal;
+
         if (currentVrm) {
           currentVrm.scene.position.y = v.h;
+          
+          // 腕の角度適用
+          const armL = currentVrm.humanoid.getNormalizedBoneNode("leftUpperArm");
+          const armR = currentVrm.humanoid.getNormalizedBoneNode("rightUpperArm");
+          if(armL) armL.rotation.z = THREE.MathUtils.degToRad(v.la);
+          if(armR) armR.rotation.z = THREE.MathUtils.degToRad(-v.ra);
+
           if (result && result.faceBlendshapes.length > 0) {
             const exp = currentVrm.expressionManager;
             result.faceBlendshapes[0].categories.forEach(c => {
