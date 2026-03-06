@@ -5,7 +5,6 @@
   <title>VRM Universal Receiver</title>
   <style>
     body { margin: 0; background: transparent; color: white; font-family: sans-serif; overflow: hidden; }
-    /* UIパネル：接続後は透明になり、マウスを乗せた時だけ見える */
     #ui_panel { 
       position: absolute; top: 10px; left: 10px; background: rgba(0,0,0,0.8); 
       padding: 15px; z-index: 10; border-radius: 8px; width: 260px;
@@ -13,7 +12,6 @@
     }
     #ui_panel.connected { opacity: 0; }
     #ui_panel.connected:hover { opacity: 1; }
-    
     .control-group { margin-bottom: 10px; }
     label { display: block; font-size: 11px; color: #ccc; }
     input { width: 100%; padding: 5px; background: #222; color: #fff; border: 1px solid #666; border-radius: 4px; box-sizing: border-box; }
@@ -36,7 +34,6 @@
       <button id="btn_connect">Connect</button>
     </div>
     <div id="status">VRMを選択してConnectを押してください</div>
-    <p style="font-size: 9px; color: #888;">※接続後はUIが隠れます。マウスをこの辺に乗せると再表示されます。</p>
   </div>
 
   <script type="importmap">
@@ -57,6 +54,7 @@
     const statusEl = document.getElementById("status");
     const uiPanel = document.getElementById("ui_panel");
     let currentVrm, peer, conn, currentVrmUrl;
+    let reconnectTimer = null;
 
     // VRM読み込み処理
     document.getElementById("vrm_file").onchange = (e) => {
@@ -77,28 +75,30 @@
       });
     }
 
-    // 接続処理
-    document.getElementById("btn_connect").onclick = () => {
+    // 接続・再接続メインロジック
+    function connectToSender() {
       const targetId = document.getElementById("target_id").value;
       if (!currentVrm || !targetId) { alert("VRMとIDが必要です"); return; }
       
       if (peer) peer.destroy();
-      peer = new Peer(); // ランダムIDで作成
+      peer = new Peer();
       
       peer.on('open', () => {
         conn = peer.connect(targetId);
+        
         conn.on('open', () => {
           statusEl.innerText = "Connected!";
           statusEl.style.color = "#00ff00";
-          // 💡 接続成功時にUIを隠すクラスを追加
           uiPanel.classList.add("connected");
+          if (reconnectTimer) {
+             clearInterval(reconnectTimer);
+             reconnectTimer = null;
+          }
         });
         
         conn.on('data', data => {
           if (!currentVrm) return;
-          // 位置・回転・表情の同期
           currentVrm.scene.position.y = data.h;
-          
           const armL = currentVrm.humanoid.getNormalizedBoneNode("leftUpperArm");
           const armR = currentVrm.humanoid.getNormalizedBoneNode("rightUpperArm");
           if(armL) armL.rotation.z = THREE.MathUtils.degToRad(data.la);
@@ -120,12 +120,28 @@
           }
         });
 
-        conn.on('close', () => {
-           statusEl.innerText = "Disconnected. Reconnecting...";
-           uiPanel.classList.remove("connected");
-        });
+        conn.on('close', startReconnect);
       });
-    };
+
+      peer.on('error', (err) => {
+        console.error(err);
+        startReconnect();
+      });
+    }
+
+    function startReconnect() {
+      if (reconnectTimer) return; // 二重起動防止
+      statusEl.innerText = "切断されました。再接続試行中...";
+      statusEl.style.color = "#ff4444";
+      uiPanel.classList.remove("connected");
+      
+      reconnectTimer = setInterval(() => {
+        console.log("再接続を試みています...");
+        connectToSender();
+      }, 5000);
+    }
+
+    document.getElementById("btn_connect").onclick = connectToSender;
 
     // Three.js 基本設定
     const scene = new THREE.Scene();
@@ -133,7 +149,7 @@
     camera.position.set(0, 1.4, 1.5);
     const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
     renderer.setSize(window.innerWidth, window.innerHeight);
-    renderer.setClearColor(0x000000, 0); // 背景透過
+    renderer.setClearColor(0x000000, 0);
     document.body.appendChild(renderer.domElement);
     scene.add(new THREE.DirectionalLight(0xffffff, Math.PI), new THREE.AmbientLight(0xffffff, 0.5));
 
