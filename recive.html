@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>VRM Receiver (Local File Support)</title>
+  <style>
+    body { margin: 0; background: transparent; overflow: hidden; font-family: sans-serif; }
+    #ui { position: absolute; top: 10px; left: 10px; z-index: 100; background: rgba(0,0,0,0.85); padding: 15px; border-radius: 8px; color: white; border: 1px solid #555; width: 220px; }
+    label { font-size: 11px; color: #ccc; display: block; margin: 8px 0 4px; }
+    input[type="text"], input[type="file"] { background: #222; color: white; border: 1px solid #666; padding: 4px; border-radius: 4px; width: 100%; box-sizing: border-box; font-size: 11px; }
+    button { width: 100%; padding: 8px; cursor: pointer; background: #28a745; color: white; border: none; border-radius: 4px; font-weight: bold; margin-top: 10px; }
+    #status { font-size: 11px; margin-top: 8px; text-align: center; color: #ffcc00; }
+    .hidden { display: none; }
+  </style>
+  <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+</head>
+<body>
+
+  <div id="ui">
+    <b style="font-size: 13px;">VRM Receiver</b>
+    
+    <label>1. PCからVRMを選択 (非公開):</label>
+    <input type="file" id="vrm_file" accept=".vrm">
+
+    <label>2. 接続先IDを入力:</label>
+    <input type="text" id="target_id" placeholder="相手のID">
+    
+    <button id="btn_join">Connect</button>
+    <div id="status">VRMを選択してください</div>
+  </div>
+
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/",
+        "@pixiv/three-vrm": "https://cdn.jsdelivr.net/npm/@pixiv/three-vrm@2.1.0/lib/three-vrm.module.js"
+      }
+    }
+  </script>
+
+  <script type="module">
+    import * as THREE from 'three';
+    import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+    import { VRMLoaderPlugin } from '@pixiv/three-vrm';
+
+    const statusEl = document.getElementById("status");
+    const vrmInput = document.getElementById("vrm_file");
+    let currentVrm, scene, camera, renderer;
+    let currentVrmUrl = null;
+    const peer = new Peer();
+
+    // Scene setup
+    scene = new THREE.Scene();
+    camera = new THREE.PerspectiveCamera(30, window.innerWidth / window.innerHeight, 0.1, 20.0);
+    camera.position.set(0, 1.4, 1.5);
+    renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.setClearColor(0x000000, 0); 
+    document.body.appendChild(renderer.domElement);
+    scene.add(new THREE.DirectionalLight(0xffffff, Math.PI), new THREE.AmbientLight(0xffffff, 0.5));
+
+    // ファイル選択時の処理
+    vrmInput.onchange = (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+
+      // 古いURLを解放してメモリリークを防ぐ
+      if (currentVrmUrl) URL.revokeObjectURL(currentVrmUrl);
+      
+      // ローカルファイルをブラウザ用URLに変換
+      currentVrmUrl = URL.createObjectURL(file);
+      loadVrm(currentVrmUrl);
+    };
+
+    function loadVrm(url) {
+      statusEl.innerText = "Loading...";
+      if (currentVrm) {
+        scene.remove(currentVrm.scene);
+        currentVrm = null;
+      }
+      
+      new GLTFLoader().register(p => new VRMLoaderPlugin(p)).load(url, 
+        gltf => {
+          currentVrm = gltf.userData.vrm;
+          scene.add(gltf.scene);
+          currentVrm.scene.scale.set(-1, 1, 1);
+          statusEl.innerText = "VRM Ready!";
+        },
+        undefined,
+        err => { statusEl.innerText = "Load Error"; }
+      );
+    }
+
+    document.getElementById("btn_join").onclick = () => {
+      const targetId = document.getElementById("target_id").value;
+      if(!targetId) return;
+      
+      const conn = peer.connect(targetId);
+      statusEl.innerText = "Connecting...";
+
+      conn.on('open', () => {
+        statusEl.innerText = "Connected!";
+        document.getElementById("ui").style.opacity = "0.2";
+      });
+      conn.on('data', (data) => updateVrm(data));
+    };
+
+    function updateVrm(v) {
+      if (!currentVrm) return;
+      currentVrm.scene.position.y = v.h;
+      const armL = currentVrm.humanoid.getNormalizedBoneNode("leftUpperArm");
+      const armR = currentVrm.humanoid.getNormalizedBoneNode("rightUpperArm");
+      if(armL) armL.rotation.z = THREE.MathUtils.degToRad(v.la);
+      if(armR) armR.rotation.z = THREE.MathUtils.degToRad(-v.ra);
+      
+      if (v.s) {
+        const exp = currentVrm.expressionManager;
+        const adj = (s) => Math.min(1.0, s > 0.1 ? s * v.b : 0);
+        exp.setValue("blinkRight", adj(v.s.eyeBlinkRight || 0));
+        exp.setValue("blinkLeft", adj(v.s.eyeBlinkLeft || 0));
+        exp.setValue("aa", v.s.jawOpen || 0);
+      }
+      if (v.r) {
+        const rot = new THREE.Quaternion().fromArray(v.r);
+        const halfRot = new THREE.Quaternion().set(0,0,0,1).slerp(rot, 0.5);
+        const head = currentVrm.humanoid.getNormalizedBoneNode("head");
+        const neck = currentVrm.humanoid.getNormalizedBoneNode("neck");
+        if(head && neck) { neck.quaternion.copy(halfRot); head.quaternion.copy(halfRot); }
+      }
+    }
+
+    function animate() {
+      requestAnimationFrame(animate);
+      if (currentVrm) currentVrm.update(1.0/60.0);
+      renderer.render(scene, camera);
+    }
+    animate();
+  </script>
+</body>
+</html>
