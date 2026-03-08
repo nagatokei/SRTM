@@ -35,7 +35,10 @@
 
     <div class="control-group">
       <label>2. 配信ID / 開始:</label>
-      <input type="text" id="room_id" readonly>
+      <div style="display: flex; gap: 5px;">
+        <input type="text" id="room_id" readonly style="flex: 1;">
+        <button id="btn_copy" class="btn-secondary" style="width: auto; margin: 0; padding: 0 10px;">コピー</button>
+      </div>
       <button id="btn_start">カメラ・マイク・配信 開始</button>
       <div id="conn_status">VRMを選択してください</div>
       <div id="mic_bar_bg"><div id="mic_bar_fill"></div></div>
@@ -112,6 +115,21 @@
 
     // ID設定
     roomIdInput.value = "vrm-" + Math.random().toString(36).substring(2, 10);
+    
+    document.getElementById("btn_copy").onclick = () => {
+      const roomId = document.getElementById("room_id");
+      navigator.clipboard.writeText(roomId.value).then(() => {
+        const btn = document.getElementById("btn_copy");
+        const originalText = btn.innerText;
+        btn.innerText = "OK!";
+        btn.style.background = "#28a745";
+        setTimeout(() => {
+          btn.innerText = originalText;
+          btn.style.background = "";
+        }, 2000);
+      });
+    };
+   
     document.getElementById("btn_reset_pose").onclick = () => { shouldResetPose = true; };
 
     // VRM読み込み
@@ -243,4 +261,5 @@
   </script>
 </body>
 </html>
+
 
