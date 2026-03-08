@@ -228,19 +228,33 @@
 
           // 表情
           if (result && result.faceBlendshapes.length > 0) {
-            const shapes = {};
+　　　　　   const shapes = {};
             result.faceBlendshapes[0].categories.forEach(c => { shapes[c.categoryName] = c.score; });
 
+            const exp = currentVrm.expressionManager;
+            const bSense = parseFloat(s_blink.value);
+            const micSense = parseFloat(s_mic.value);
+
+            // 1. まばたき（これだけは「表情」ではなく「動作」として扱う）
             exp.setValue("blinkRight", Math.min(1.0, (shapes.eyeBlinkRight || 0) * bSense));
             exp.setValue("blinkLeft", Math.min(1.0, (shapes.eyeBlinkLeft || 0) * bSense));
-            exp.setValue("sad", Math.min(1.0, (shapes.browInnerUp || 0) * browSense));
-            exp.setValue("angry", Math.min(1.0, ((shapes.browDownLeft || 0) + (shapes.browDownRight || 0)) * browSense));
 
-            const mouthOpen = Math.min(1.0, currentVolume * micSense);
-            exp.setValue("aa", mouthOpen);
-            v.s = { eyeBlinkRight: shapes.eyeBlinkRight, eyeBlinkLeft: shapes.eyeBlinkLeft, jawOpen: mouthOpen };
+           // 2. 口パク（マイクの音量だけで「Aa」の形を動かす）
+           // カメラの口認識（jawOpenなど）は一切無視します
+           const mouthOpen = Math.min(1.0, currentVolume * micSense);
+           exp.setValue("aa", mouthOpen);
+
+           // 3. 他の「sad」「angry」「happy」「surprised」などは一切 setValue しない
+           // これにより、モデルのデフォルトの顔（素顔）が維持されます
+
+           // 受信側への送信データ
+           v.s = { 
+             eyeBlinkRight: shapes.eyeBlinkRight, 
+             eyeBlinkLeft: shapes.eyeBlinkLeft, 
+             jawOpen: mouthOpen 
+           };
           }
-
+          
           // 頭の回転 (正面リセット対応)
           if (result && result.facialTransformationMatrixes.length > 0) {
             const rawRot = new THREE.Quaternion().setFromRotationMatrix(new THREE.Matrix4().fromArray(result.facialTransformationMatrixes[0].data));
@@ -288,3 +302,4 @@
   </script>
 </body>
 </html>
+
