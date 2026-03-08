@@ -172,7 +172,11 @@
 
         // 1. 高さの補間
         currentVrm.scene.position.y += (targetData.h - currentVrm.scene.position.y) * lerpSpeed;
-
+　　　　if (targetData.s_scale) {
+            const s = targetData.s_scale;
+            // 反転しているので -s, s, s
+            currentVrm.scene.scale.set(-s, s, s);
+      　}
         // 2. 腕の角度の補間
         const armL = currentVrm.humanoid.getNormalizedBoneNode("leftUpperArm");
         const armR = currentVrm.humanoid.getNormalizedBoneNode("rightUpperArm");
@@ -227,6 +231,7 @@
   </script>
 </body>
 </html>
+
 
 
 
