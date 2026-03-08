@@ -2,18 +2,17 @@
 <html>
 <head>
   <meta charset="utf-8">
-  <title>VRM Sender (Final Optimized)</title>
+  <title>VRM Sender (Audio & Brow Focus)</title>
   <style>
     body { margin: 0; background: #000; color: white; font-family: sans-serif; overflow: hidden; }
     #ui_panel { position: absolute; top: 10px; left: 10px; background: rgba(0,0,0,0.85); padding: 15px; z-index: 10; border-radius: 8px; border: 1px solid #555; width: 280px; max-height: 90vh; overflow-y: auto; }
     .control-group { margin-bottom: 12px; }
     label { display: block; font-size: 11px; margin-bottom: 3px; color: #ccc; }
-    select, input[type="text"], input[type="file"] { width: 100%; padding: 5px; background: #222; color: #fff; border: 1px solid #666; border-radius: 4px; box-sizing: border-box; font-size: 12px; margin-bottom: 5px; }
     input[type="range"] { width: 100%; cursor: pointer; }
+    input[type="text"], input[type="file"] { width: 100%; padding: 5px; background: #222; color: #fff; border: 1px solid #666; border-radius: 4px; box-sizing: border-box; font-size: 12px; }
     #room_id { cursor: copy; border-color: #0078d4; } 
-    button { width: 100%; padding: 8px; cursor: pointer; background: #0078d4; color: white; border: none; border-radius: 4px; font-weight: bold; margin-top: 5px; }
+    button { width: 100%; padding: 8px; cursor: pointer; background: #0078d4; color: white; border: none; border-radius: 4px; font-weight: bold; margin-top: 10px; }
     button:hover { background: #005a9e; }
-    .btn-secondary { background: #6c757d; }
     #video_ui { position: absolute; bottom: 10px; right: 10px; width: 160px; opacity: 0.5; }
     video { width: 100%; transform: scaleX(-1); border-radius: 4px; }
     #conn_status { font-size: 12px; color: #ffcc00; margin-top: 10px; font-weight: bold; text-align: center; }
@@ -23,51 +22,36 @@
 <body>
 
   <div id="ui_panel">
-    <b style="font-size: 14px;">VRM Sender (Host)</b>
+    <b style="font-size: 14px;">VRM Sender (Audio & Brow)</b>
     
     <div class="control-group" style="margin-top:15px;">
-      <label>1. デバイス選択:</label>
-      <select id="select_camera"><option>カメラ読み込み中...</option></select>
-      <select id="select_mic"><option>マイク読み込み中...</option></select>
-    </div>
-
-    <div class="control-group">
-      <label>2. 自分のVRMを選択:</label>
+      <label>1. 自分のVRMを選択:</label>
       <input type="file" id="vrm_file" accept=".vrm">
     </div>
 
     <div class="control-group">
-      <label>3. ID (クリックコピー):</label>
+      <label>2. My ID (クリックでコピー):</label>
       <input type="text" id="room_id" readonly>
-      <button id="btn_start">送信 & トラッキング開始</button>
-      <div id="conn_status">準備完了</div>
+      <button id="btn_start">トラッキング ＆ 送信開始</button>
+      <div id="conn_status">VRMを選択してください</div>
     </div>
 
-    <hr style="border: 0; border-top: 1px solid #444; margin: 10px 0;">
-
-    <div class="control-group">
-      <label>カメラ・ポーズ調整:</label>
-      <button id="btn_reset_pose" class="btn-secondary">正面リセット</button>
-      <button id="btn_reset_pos" class="btn-secondary">高さ0リセット</button>
-    </div>
+    <hr style="border: 0; border-top: 1px solid #444; margin: 15px 0;">
     
     <div class="control-group">
-      <label>上下角度微調整: <span id="v_pitch">0</span>°</label>
-      <input type="range" id="s_pitch" min="-20" max="20" step="1" value="0">
+      <label>まばたき感度: <span id="v_blink">1.5</span></label>
+      <input type="range" id="s_blink" min="1.0" max="3.0" step="0.1" value="1.5">
     </div>
-
     <div class="control-group">
       <label>眉毛の感度: <span id="v_brow">1.5</span></label>
       <input type="range" id="s_brow" min="0.0" max="3.0" step="0.1" value="1.5">
     </div>
-
     <div class="control-group">
-      <label>マイク感度: <span id="v_mouth">1.5</span></label>
-      <input type="range" id="s_mouth" min="0.5" max="5.0" step="0.1" value="1.5">
+      <label>マイク感度(口パク): <span id="v_mic">1.5</span></label>
+      <input type="range" id="s_mic" min="0.5" max="5.0" step="0.1" value="1.5">
     </div>
-    
     <div class="control-group">
-      <label>高さ(Y軸): <span id="v_h">0.0</span></label>
+      <label>高さ調整: <span id="v_h">0.0</span></label>
       <input type="range" id="s_h" min="-0.5" max="0.5" step="0.01" value="0.0">
     </div>
   </div>
@@ -93,52 +77,24 @@
 
     const video = document.getElementById("input_video");
     const connStatus = document.getElementById("conn_status");
-    const camSelect = document.getElementById("select_camera");
-    const micSelect = document.getElementById("select_mic");
     const vrmInput = document.getElementById("vrm_file");
+    const roomIdInput = document.getElementById("room_id");
     
     const s_h = document.getElementById("s_h");
-    const s_pitch = document.getElementById("s_pitch");
-    const s_mouth = document.getElementById("s_mouth");
+    const s_blink = document.getElementById("s_blink");
     const s_brow = document.getElementById("s_brow");
+    const s_mic = document.getElementById("s_mic");
 
     let currentVrm, faceLandmarker, lastVideoTime = -1;
     let peer, connections = [], currentVrmUrl = null;
-    let offsetRotation = new THREE.Quaternion();
-    let shouldResetPose = false;
+    let audioContext, analyser, dataArray, currentVolume = 0;
 
-    let audioContext, analyser, dataArray;
-    let currentVolume = 0;
+    // --- 1. PeerJS 初期化 (ページ読み込み時に実行) ---
+    const savedId = localStorage.getItem("vrm_host_id") || "vrm-" + Math.random().toString(36).substring(2, 12);
+    localStorage.setItem("vrm_host_id", savedId);
+    roomIdInput.value = savedId;
 
-    async function listDevices() {
-      await navigator.mediaDevices.getUserMedia({ audio: true, video: true });
-      const devices = await navigator.mediaDevices.enumerateDevices();
-      camSelect.innerHTML = ""; micSelect.innerHTML = "";
-      devices.forEach(device => {
-        const option = document.createElement("option");
-        option.value = device.deviceId;
-        option.text = device.label || `${device.kind}`;
-        if (device.kind === "videoinput") camSelect.appendChild(option);
-        else if (device.kind === "audioinput") micSelect.appendChild(option);
-      });
-    }
-
-    async function initAudio(deviceId) {
-      if (audioContext) audioContext.close();
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: { deviceId: { exact: deviceId } } });
-      audioContext = new AudioContext();
-      const source = audioContext.createMediaStreamSource(stream);
-      analyser = audioContext.createAnalyser();
-      analyser.fftSize = 256;
-      source.connect(analyser);
-      dataArray = new Uint8Array(analyser.frequencyBinCount);
-    }
-
-    async function initCamera(deviceId) {
-      const stream = await navigator.mediaDevices.getUserMedia({ video: { deviceId: { exact: deviceId }, width: 640, height: 480 } });
-      video.srcObject = stream;
-    }
-
+    // --- 2. VRM 読み込み ---
     vrmInput.onchange = (e) => {
       const file = e.target.files[0];
       if (!file) return;
@@ -149,58 +105,75 @@
         currentVrm = gltf.userData.vrm;
         scene.add(gltf.scene);
         currentVrm.scene.scale.set(-1, 1, 1);
-        // 利用可能なモーフ名をコンソールに出力（眉毛のデバッグ用）
-        console.log("利用可能なモーフ:", currentVrm.expressionManager.expressions.map(e => e.expressionName));
+        connStatus.innerText = "VRM準備OK";
       });
     };
 
-    function setupHost() {
-      const btn = document.getElementById("btn_start");
-      const roomIdInput = document.getElementById("room_id");
-      let savedId = localStorage.getItem("vrm_host_id") || "vrm-" + Math.random().toString(36).substring(2, 10);
-      roomIdInput.value = savedId;
-      localStorage.setItem("vrm_host_id", savedId);
+    // --- 3. 音声・ Peer 接続開始 ---
+    document.getElementById("btn_start").onclick = async () => {
+      if (!currentVrm) { alert("VRMを先に選んでね！"); return; }
+      
+      // マイク初期化
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        audioContext = new AudioContext();
+        const source = audioContext.createMediaStreamSource(stream);
+        analyser = audioContext.createAnalyser();
+        analyser.fftSize = 256;
+        source.connect(analyser);
+        dataArray = new Uint8Array(analyser.frequencyBinCount);
+      } catch(e) { console.error("Mic error:", e); }
 
-      document.getElementById("btn_reset_pose").onclick = () => { shouldResetPose = true; };
-      document.getElementById("btn_reset_pos").onclick = () => { s_h.value = 0; };
+      // Peer開始
+      if (peer) peer.destroy();
+      peer = new Peer(roomIdInput.value);
+      peer.on('open', id => { 
+        connStatus.innerText = "配信中: " + id;
+        connStatus.style.color = "#00ff00";
+      });
+      peer.on('connection', conn => {
+        conn.on('open', () => connections.push(conn));
+      });
+    };
 
-      btn.onclick = async () => {
-        if (!currentVrm) { alert("VRMを選択してください"); return; }
-        await initAudio(micSelect.value);
-        await initCamera(camSelect.value);
-        if (peer) peer.destroy();
-        peer = new Peer(roomIdInput.value); 
-        peer.on('open', id => { connStatus.innerText = "待機中: " + id; });
-        peer.on('connection', conn => {
-          conn.on('open', () => { connections.push(conn); });
-          conn.on('close', () => { connections = connections.filter(c => c !== conn); });
-        });
-      };
+    // --- 4. トラッキング設定 ---
+    async function setupTracking() {
+      const fileset = await FilesetResolver.forVisionTasks("https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.3/wasm");
+      faceLandmarker = await FaceLandmarker.createFromOptions(fileset, {
+        baseOptions: { modelAssetPath: `https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task`, delegate: "GPU" },
+        outputFaceBlendshapes: true, outputFacialTransformationMatrixes: true, runningMode: "VIDEO"
+      });
+      const stream = await navigator.mediaDevices.getUserMedia({ video: { width: 640, height: 480 } });
+      video.srcObject = stream;
+      video.onloadeddata = animate;
     }
 
+    // --- 5. メインループ ---
     function animate() {
       requestAnimationFrame(animate);
+
+      // 音量計算
       if (analyser) {
         analyser.getByteFrequencyData(dataArray);
         let sum = dataArray.reduce((a, b) => a + b, 0);
         currentVolume = (sum / dataArray.length) / 128.0;
       }
 
-      if (video.readyState >= 2 && video.currentTime !== lastVideoTime) {
+      if (video.currentTime !== lastVideoTime) {
         lastVideoTime = video.currentTime;
         const result = faceLandmarker ? faceLandmarker.detectForVideo(video, performance.now()) : null;
         
         const hVal = parseFloat(s_h.value);
-        const pVal = parseFloat(s_pitch.value);
-        const mVal = parseFloat(s_mouth.value);
-        const bSense = parseFloat(s_brow.value);
+        const bSense = parseFloat(s_blink.value);
+        const browSense = parseFloat(s_brow.value);
+        const micSense = parseFloat(s_mic.value);
 
-        const v = { h: hVal, la: 0, ra: 0, b: 1.5, s: {}, r: null };
-        
+        const v = { h: hVal, la: 0, ra: 0, b: bSense, s: {}, r: null };
+
         document.getElementById("v_h").innerText = hVal.toFixed(2);
-        document.getElementById("v_pitch").innerText = pVal;
-        document.getElementById("v_mouth").innerText = mVal;
-        document.getElementById("v_brow").innerText = bSense;
+        document.getElementById("v_blink").innerText = bSense;
+        document.getElementById("v_brow").innerText = browSense;
+        document.getElementById("v_mic").innerText = micSense;
 
         if (currentVrm) {
           currentVrm.scene.position.y = v.h;
@@ -211,7 +184,44 @@
             result.faceBlendshapes[0].categories.forEach(c => { shapes[c.categoryName] = c.score; });
 
             // まばたき (カメラ)
-            exp.setValue("blinkRight", Math.min(1.0, (shapes.eyeBlinkRight || 0) * 1.5));
-            exp.setValue("blinkLeft", Math.min(1.0, (shapes.eyeBlinkLeft || 0) * 1.5));
+            exp.setValue("blinkRight", Math.min(1.0, (shapes.eyeBlinkRight || 0) * bSense));
+            exp.setValue("blinkLeft", Math.min(1.0, (shapes.eyeBlinkLeft || 0) * bSense));
 
-            // 💡 眉毛トラ
+            // 眉毛 (browInnerUp を sad に、browDown を angry に簡易割り当て)
+            exp.setValue("sad", Math.min(1.0, (shapes.browInnerUp || 0) * browSense));
+            exp.setValue("angry", Math.min(1.0, ((shapes.browDownLeft || 0) + (shapes.browDownRight || 0)) * browSense));
+
+            // リップシンク (マイク音量優先)
+            const mouthOpen = Math.min(1.0, currentVolume * micSense);
+            exp.setValue("aa", mouthOpen);
+
+            v.s = { eyeBlinkRight: shapes.eyeBlinkRight, eyeBlinkLeft: shapes.eyeBlinkLeft, jawOpen: mouthOpen };
+          }
+
+          if (result && result.facialTransformationMatrixes.length > 0) {
+            const rot = new THREE.Quaternion().setFromRotationMatrix(new THREE.Matrix4().fromArray(result.facialTransformationMatrixes[0].data));
+            v.r = [rot.x, rot.y, rot.z, rot.w];
+            const halfRot = new THREE.Quaternion().set(0,0,0,1).slerp(rot, 0.5);
+            const head = currentVrm.humanoid.getNormalizedBoneNode("head");
+            const neck = currentVrm.humanoid.getNormalizedBoneNode("neck");
+            if(head && neck) { neck.quaternion.copy(halfRot); head.quaternion.copy(halfRot); }
+          }
+        }
+        connections.forEach(conn => { if (conn.open) conn.send(v); });
+      }
+      if (currentVrm) currentVrm.update(1.0/60.0);
+      renderer.render(scene, camera);
+    }
+
+    const scene = new THREE.Scene();
+    const camera = new THREE.PerspectiveCamera(30, window.innerWidth / window.innerHeight, 0.1, 20.0);
+    camera.position.set(0, 1.4, 1.5);
+    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    document.body.appendChild(renderer.domElement);
+    scene.add(new THREE.DirectionalLight(0xffffff, Math.PI), new THREE.AmbientLight(0xffffff, 0.5));
+
+    setupTracking();
+  </script>
+</body>
+</html>
