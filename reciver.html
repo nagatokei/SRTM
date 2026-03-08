@@ -2,47 +2,22 @@
 <html>
 <head>
   <meta charset="utf-8">
-  <title>VRM Receiver (Window Hover UI)</title>
+  <title>VRM Receiver (Fixed & Optimized)</title>
   <style>
     body { 
-      margin: 0; 
-      background: transparent; 
-      overflow: hidden; 
-      font-family: sans-serif;
-      width: 100vw;
-      height: 100vh;
+      margin: 0; background: transparent; overflow: hidden; font-family: sans-serif;
+      width: 100vw; height: 100vh;
     }
-
-    /* 💡 UIパネルの基本設定 */
     #ui { 
-      position: absolute; 
-      top: 10px; 
-      left: 10px; 
-      z-index: 100; 
-      background: rgba(0,0,0,0.9); 
-      padding: 15px; 
-      border-radius: 8px; 
-      color: white; 
-      border: 1px solid #555; 
-      width: 240px; 
-      
-      /* 💡 初期状態は透明、ふわっと出す */
-      opacity: 0;
-      pointer-events: none; /* 透明な時はクリックをスルーさせる */
-      transition: opacity 0.3s ease;
+      position: absolute; top: 10px; left: 10px; z-index: 100; 
+      background: rgba(0,0,0,0.9); padding: 15px; border-radius: 8px; 
+      color: white; border: 1px solid #555; width: 240px; 
+      opacity: 0; pointer-events: none; transition: opacity 0.3s ease;
     }
-
-    /* 💡 ウィンドウ全体(body)にマウスが乗ったらUIを表示 */
-    body:hover #ui {
-      opacity: 1;
-      pointer-events: auto; /* 表示されたら操作可能に */
-    }
-
-    /* 💡 接続前やエラー時は強制的に表示するクラス */
-    #ui.force-show {
-      opacity: 1;
-      pointer-events: auto;
-    }
+    /* 💡 ウィンドウ全体にマウスが乗ったらUIを表示 */
+    body:hover #ui { opacity: 1; pointer-events: auto; }
+    /* 💡 接続前やエラー時は強制表示 */
+    #ui.force-show { opacity: 1; pointer-events: auto; }
 
     label { font-size: 11px; color: #ccc; display: block; margin: 8px 0 4px; }
     input[type="text"], input[type="password"], input[type="file"] { 
@@ -59,16 +34,12 @@
 </head>
 <body>
 
-  <!-- 最初は force-show をつけておき、接続後に外す -->
   <div id="ui" class="force-show">
     <b style="font-size: 13px;">VRM Receiver</b>
-    
     <label>1. VRMを選択:</label>
     <input type="file" id="vrm_file" accept=".vrm">
-
-    <label>2. 接続先ID (Ctrl+Vで貼り付け):</label>
-    <input type="password" id="target_id" placeholder="IDを貼り付け">
-    
+    <label>2. 接続先ID (合言葉):</label>
+    <input type="password" id="target_id" placeholder="IDを入力または貼り付け">
     <button id="btn_join">Connect</button>
     <div id="status">VRMを選択してください</div>
   </div>
@@ -94,13 +65,15 @@
     const targetInput = document.getElementById("target_id");
     
     let currentVrm, scene, camera, renderer, currentVrmUrl = null;
-    const peer = new Peer();
+    let peer = null, conn = null, reconnectTimer = null;
 
+    // 💡 起動時に保存されたIDを復元
     window.onload = () => {
       const savedId = localStorage.getItem("vrm_receive_id");
       if (savedId) targetInput.value = savedId;
     };
 
+    // --- Scene Setup ---
     scene = new THREE.Scene();
     camera = new THREE.PerspectiveCamera(30, window.innerWidth / window.innerHeight, 0.1, 20.0);
     camera.position.set(0, 1.4, 1.5);
@@ -133,25 +106,58 @@
       );
     }
 
-    document.getElementById("btn_join").onclick = () => {
+    // --- 💡 接続ロジック（古い方の「動く」構造を採用） ---
+    function startConnection() {
       const targetId = targetInput.value;
-      if(!targetId) return;
+      if(!currentVrm || !targetId) { 
+        statusEl.innerText = "VRMとIDが必要です"; 
+        uiPanel.classList.add("force-show");
+        return; 
+      }
       
       localStorage.setItem("vrm_receive_id", targetId);
-      const conn = peer.connect(targetId);
+      
+      // 💡 接続のたびにPeerを新しく生成（これが確実）
+      if (peer) peer.destroy();
+      peer = new Peer();
+
       statusEl.innerText = "Connecting...";
 
-      conn.on('open', () => {
-        statusEl.innerText = "Connected!";
-        // 💡 接続成功！強制表示を解除して「ウィンドウホバー時のみ」にする
-        uiPanel.classList.remove("force-show");
+      peer.on('open', () => {
+        conn = peer.connect(targetId);
+        
+        conn.on('open', () => {
+          statusEl.innerText = "Connected!";
+          statusEl.style.color = "#00ff00";
+          uiPanel.classList.remove("force-show");
+          if (reconnectTimer) { clearInterval(reconnectTimer); reconnectTimer = null; }
+        });
+
+        conn.on('data', (data) => updateVrm(data));
+        
+        conn.on('close', () => {
+          statusEl.innerText = "切断されました。再試行中...";
+          statusEl.style.color = "#ff4444";
+          uiPanel.classList.add("force-show");
+          triggerReconnect();
+        });
       });
-      conn.on('data', (data) => updateVrm(data));
-      conn.on('close', () => {
-        statusEl.innerText = "Disconnected.";
-        uiPanel.classList.add("force-show"); // 切断時は再表示
+
+      peer.on('error', (err) => {
+        console.error(err);
+        triggerReconnect();
       });
-    };
+    }
+
+    function triggerReconnect() {
+      if (reconnectTimer) return;
+      reconnectTimer = setInterval(() => {
+        console.log("再接続を試みています...");
+        startConnection();
+      }, 5000);
+    }
+
+    document.getElementById("btn_join").onclick = startConnection;
 
     function updateVrm(v) {
       if (!currentVrm) return;
@@ -183,6 +189,12 @@
       renderer.render(scene, camera);
     }
     animate();
+
+    window.addEventListener('resize', () => {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    });
   </script>
 </body>
 </html>
