@@ -65,7 +65,7 @@
     // 💡 変数宣言 (scene, camera, rendererを忘れずに!)
     let currentVrm, scene, camera, renderer, peer, conn, currentVrmUrl;
     let reconnectTimer = null;
-    let targetData = { h: 0, la: 0, ra: 0, r: [0, 0, 0, 1], s: null, b: 1.0, scale: 1.0 };
+    let targetData = { h: 0, la: 0, ra: 0, r: [0, 0, 0, 1], s: null, b: 1.0, s_scale: 1.0 };
   　
     const updateIdStatus = () => {
       if (targetInput.value.length > 0) {
@@ -101,7 +101,7 @@
         if (currentVrm) scene.remove(currentVrm.scene);
         currentVrm = gltf.userData.vrm;
         scene.add(gltf.scene);
-        currentVrm.scene.scale.set(-1, 1, 1);
+        currentVrm.scene.s_scale.set(-1, 1, 1);
         statusEl.innerText = "VRM読み込み完了！";
       });
     }
@@ -232,6 +232,7 @@
   </script>
 </body>
 </html>
+
 
 
 
