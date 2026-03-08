@@ -2,20 +2,26 @@
 <html>
 <head>
   <meta charset="utf-8">
-  <title>VRM Universal Receiver</title>
+  <title>VRM Stable Receiver</title>
   <style>
-    body { margin: 0; background: transparent; color: white; font-family: sans-serif; overflow: hidden; }
+    body { margin: 0; background: transparent; color: white; font-family: sans-serif; overflow: hidden; width: 100vw; height: 100vh; }
+    
+    /* 💡 UIパネルの設定 */
     #ui_panel { 
       position: absolute; top: 10px; left: 10px; background: rgba(0,0,0,0.8); 
-      padding: 15px; z-index: 10; border-radius: 8px; width: 260px;
-      transition: opacity 0.5s; opacity: 1;
+      padding: 15px; z-index: 100; border-radius: 8px; width: 260px;
+      transition: opacity 0.3s;
+      opacity: 1; /* 最初は見せる */
     }
-    #ui_panel.connected { opacity: 0; }
-    #ui_panel.connected:hover { opacity: 1; }
+
+    /* 💡 接続中(connected)は隠すが、マウスをウィンドウに乗せれば見える */
+    #ui_panel.connected { opacity: 0; pointer-events: none; }
+    body:hover #ui_panel { opacity: 1; pointer-events: auto; }
+
     .control-group { margin-bottom: 10px; }
-    label { display: block; font-size: 11px; color: #ccc; }
-    input { width: 100%; padding: 5px; background: #222; color: #fff; border: 1px solid #666; border-radius: 4px; box-sizing: border-box; }
-    button { width: 100%; padding: 8px; cursor: pointer; background: #444; color: white; border: none; border-radius: 4px; margin-top: 10px; }
+    label { display: block; font-size: 11px; color: #ccc; margin-bottom: 4px; }
+    input { width: 100%; padding: 6px; background: #222; color: #fff; border: 1px solid #666; border-radius: 4px; box-sizing: border-box; }
+    button { width: 100%; padding: 10px; cursor: pointer; background: #28a745; color: white; border: none; border-radius: 4px; font-weight: bold; margin-top: 10px; }
     #status { font-size: 12px; color: #ffcc00; margin-top: 8px; text-align: center; }
   </style>
   <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
@@ -25,12 +31,12 @@
   <div id="ui_panel">
     <b style="font-size: 14px;">Receiver Settings</b>
     <div class="control-group" style="margin-top:10px;">
-      <label>1. 使用するVRMを選択 (初回のみ):</label>
+      <label>1. VRMファイルを選択:</label>
       <input type="file" id="vrm_file" accept=".vrm">
     </div>
     <div class="control-group">
-      <label>2. 合言葉 (ID):</label>
-      <input type="text" id="target_id" placeholder="例: my-avatar-room">
+      <label>2. 合言葉 (送信側と同じID):</label>
+      <input type="text" id="target_id" placeholder="IDを入力">
       <button id="btn_connect">Connect</button>
     </div>
     <div id="status">VRMを選択してConnectを押してください</div>
@@ -53,10 +59,17 @@
 
     const statusEl = document.getElementById("status");
     const uiPanel = document.getElementById("ui_panel");
-    let currentVrm, peer, conn, currentVrmUrl;
+    const targetInput = document.getElementById("target_id");
+    
+    // 💡 変数宣言 (scene, camera, rendererを忘れずに!)
+    let currentVrm, scene, camera, renderer, peer, conn, currentVrmUrl;
     let reconnectTimer = null;
 
-    // VRM読み込み処理
+    // ID復元
+    const saved = localStorage.getItem("vrm_receive_id");
+    if (saved) targetInput.value = saved;
+
+    // VRM読み込み
     document.getElementById("vrm_file").onchange = (e) => {
       const file = e.target.files[0];
       if (!file) return;
@@ -66,6 +79,7 @@
     };
 
     function loadVRM(url) {
+      statusEl.innerText = "Loading...";
       new GLTFLoader().register(p => new VRMLoaderPlugin(p)).load(url, gltf => {
         if (currentVrm) scene.remove(currentVrm.scene);
         currentVrm = gltf.userData.vrm;
@@ -75,49 +89,30 @@
       });
     }
 
-    // 接続・再接続メインロジック
+    // 💡 確実に動く接続ロジック
     function connectToSender() {
-      const targetId = document.getElementById("target_id").value;
+      const targetId = targetInput.value;
       if (!currentVrm || !targetId) { alert("VRMとIDが必要です"); return; }
       
+      localStorage.setItem("vrm_receive_id", targetId);
       if (peer) peer.destroy();
       peer = new Peer();
       
       peer.on('open', () => {
+        statusEl.innerText = "接続中...";
         conn = peer.connect(targetId);
         
         conn.on('open', () => {
           statusEl.innerText = "Connected!";
           statusEl.style.color = "#00ff00";
-          uiPanel.classList.add("connected");
-          if (reconnectTimer) {
-             clearInterval(reconnectTimer);
-             reconnectTimer = null;
-          }
+          uiPanel.classList.add("connected"); // 接続成功でUIを隠す準備
+          if (reconnectTimer) { clearInterval(reconnectTimer); reconnectTimer = null; }
         });
         
+        // 💡 ここがデータの受け取り口（これがないと動きません！）
         conn.on('data', data => {
           if (!currentVrm) return;
-          currentVrm.scene.position.y = data.h;
-          const armL = currentVrm.humanoid.getNormalizedBoneNode("leftUpperArm");
-          const armR = currentVrm.humanoid.getNormalizedBoneNode("rightUpperArm");
-          if(armL) armL.rotation.z = THREE.MathUtils.degToRad(data.la);
-          if(armR) armR.rotation.z = THREE.MathUtils.degToRad(-data.ra);
-
-          if (data.r) {
-            const head = currentVrm.humanoid.getNormalizedBoneNode("head");
-            const neck = currentVrm.humanoid.getNormalizedBoneNode("neck");
-            const rot = new THREE.Quaternion().fromArray(data.r);
-            const halfRot = new THREE.Quaternion().set(0,0,0,1).slerp(rot, 0.5);
-            if(head && neck) { neck.quaternion.copy(halfRot); head.quaternion.copy(halfRot); }
-          }
-          if (data.s) {
-            const exp = currentVrm.expressionManager;
-            const adj = (s) => Math.min(1.0, s > 0.1 ? s * data.b : 0);
-            exp.setValue("blinkRight", adj(data.s.eyeBlinkRight || 0));
-            exp.setValue("blinkLeft", adj(data.s.eyeBlinkLeft || 0));
-            exp.setValue("aa", data.s.jawOpen || 0);
-          }
+          updateVrm(data);
         });
 
         conn.on('close', startReconnect);
@@ -130,24 +125,42 @@
     }
 
     function startReconnect() {
-      if (reconnectTimer) return; // 二重起動防止
-      statusEl.innerText = "切断されました。再接続試行中...";
-      statusEl.style.color = "#ff4444";
+      if (reconnectTimer) return;
+      statusEl.innerText = "再接続待ち...";
       uiPanel.classList.remove("connected");
-      
-      reconnectTimer = setInterval(() => {
-        console.log("再接続を試みています...");
-        connectToSender();
-      }, 5000);
+      reconnectTimer = setInterval(connectToSender, 5000);
     }
 
     document.getElementById("btn_connect").onclick = connectToSender;
 
-    // Three.js 基本設定
-    const scene = new THREE.Scene();
-    const camera = new THREE.PerspectiveCamera(30, window.innerWidth / window.innerHeight, 0.1, 20.0);
+    function updateVrm(data) {
+      currentVrm.scene.position.y = data.h;
+      const armL = currentVrm.humanoid.getNormalizedBoneNode("leftUpperArm");
+      const armR = currentVrm.humanoid.getNormalizedBoneNode("rightUpperArm");
+      if(armL) armL.rotation.z = THREE.MathUtils.degToRad(data.la);
+      if(armR) armR.rotation.z = THREE.MathUtils.degToRad(-data.ra);
+
+      if (data.r) {
+        const head = currentVrm.humanoid.getNormalizedBoneNode("head");
+        const neck = currentVrm.humanoid.getNormalizedBoneNode("neck");
+        const rot = new THREE.Quaternion().fromArray(data.r);
+        const halfRot = new THREE.Quaternion().set(0,0,0,1).slerp(rot, 0.5);
+        if(head && neck) { neck.quaternion.copy(halfRot); head.quaternion.copy(halfRot); }
+      }
+      if (data.s) {
+        const exp = currentVrm.expressionManager;
+        const adj = (s) => Math.min(1.0, s > 0.1 ? s * data.b : 0);
+        exp.setValue("blinkRight", adj(data.s.eyeBlinkRight || 0));
+        exp.setValue("blinkLeft", adj(data.s.eyeBlinkLeft || 0));
+        exp.setValue("aa", data.s.jawOpen || 0);
+      }
+    }
+
+    // Three.js 初期化
+    scene = new THREE.Scene();
+    camera = new THREE.PerspectiveCamera(30, window.innerWidth / window.innerHeight, 0.1, 20.0);
     camera.position.set(0, 1.4, 1.5);
-    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+    renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
     renderer.setSize(window.innerWidth, window.innerHeight);
     renderer.setClearColor(0x000000, 0);
     document.body.appendChild(renderer.domElement);
@@ -168,4 +181,3 @@
   </script>
 </body>
 </html>
-
