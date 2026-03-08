@@ -194,7 +194,7 @@
         document.getElementById("v_mic").innerText = mSense;
         document.getElementById("v_scale").innerText = scaleVal.toFixed(2);
 
-        const vData = { h, la: l, ra: r, b: bSense, s: {}, r: null,scale: scaleVal };
+        const vData = { h, la: l, ra: r, b: bSense, s: {}, r: null,s_scale: scaleVal };
 
         if (currentVrm) {
           // 姿勢反映
@@ -261,6 +261,7 @@
   </script>
 </body>
 </html>
+
 
 
 
