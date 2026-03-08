@@ -153,15 +153,6 @@
     function updateVrm(data) {
       targetData = data; // 直接動かさず、目標地点を上書きするだけ
     }
-   
-      if (data.s) {
-        const exp = currentVrm.expressionManager;
-        const adj = (s) => Math.min(1.0, s > 0.1 ? s * data.b : 0);
-        exp.setValue("blinkRight", adj(data.s.eyeBlinkRight || 0));
-        exp.setValue("blinkLeft", adj(data.s.eyeBlinkLeft || 0));
-        exp.setValue("aa", data.s.jawOpen || 0);
-      }
-    }
 
     // Three.js 初期化
     scene = new THREE.Scene();
@@ -236,6 +227,7 @@
   </script>
 </body>
 </html>
+
 
 
 
