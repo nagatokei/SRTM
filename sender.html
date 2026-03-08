@@ -54,6 +54,11 @@
     </div>
 
     <div class="control-group">
+      <label>キャラの大きさ: <span class="val-disp" id="v_scale">1.0</span></label>
+      <input type="range" id="s_scale" min="0.1" max="2.0" step="0.05" value="1.0">
+　  </div>
+    
+    <div class="control-group">
       <label>左腕の角度: <span class="val-disp" id="v_l">0</span>°</label>
       <input type="range" id="s_l" min="-90" max="90" step="1" value="0">
     </div>
@@ -163,16 +168,19 @@
         // スライダー値取得 & 表示更新
         const h = parseFloat(s_h.value), l = parseFloat(s_l.value), r = parseFloat(s_r.value);
         const bSense = parseFloat(s_blink.value), mSense = parseFloat(s_mic.value);
+        const scaleVal = parseFloat(document.getElementById("s_scale").value);
         document.getElementById("v_h").innerText = h.toFixed(2);
         document.getElementById("v_l").innerText = l;
         document.getElementById("v_r").innerText = r;
         document.getElementById("v_blink").innerText = bSense;
         document.getElementById("v_mic").innerText = mSense;
+        document.getElementById("v_scale").innerText = scaleVal.toFixed(2);
 
         const vData = { h, la: l, ra: r, b: bSense, s: {}, r: null };
 
         if (currentVrm) {
           // 姿勢反映
+          currentVrm.scene.scale.set(-scaleVal, scaleVal, scaleVal);
           currentVrm.scene.position.y = h;
           const armL = currentVrm.humanoid.getNormalizedBoneNode("leftUpperArm");
           const armR = currentVrm.humanoid.getNormalizedBoneNode("rightUpperArm");
@@ -235,3 +243,4 @@
   </script>
 </body>
 </html>
+
