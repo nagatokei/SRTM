@@ -2,7 +2,7 @@
 <html>
 <head>
   <meta charset="utf-8">
-  <title>VRM Universal Sender (Complete Edition)</title>
+  <title>VRM Universal Sender (Complete Edition v2)</title>
   <style>
     body { margin: 0; background: #000; color: white; font-family: sans-serif; overflow: hidden; }
     #ui_panel { position: absolute; top: 10px; left: 10px; background: rgba(0,0,0,0.85); padding: 15px; z-index: 10; border-radius: 8px; border: 1px solid #555; width: 280px; max-height: 90vh; overflow-y: auto; }
@@ -20,6 +20,8 @@
     #conn_status { font-size: 12px; color: #ffcc00; margin-top: 10px; font-weight: bold; text-align: center; }
     .stats { font-size: 10px; color: #888; text-align: center; margin-top: 5px; }
     hr { border: 0; border-top: 1px solid #444; margin: 15px 0; }
+    #mic_bar_bg { width: 100%; height: 6px; background: #333; border-radius: 3px; margin-top: 5px; overflow: hidden; }
+    #mic_bar_fill { width: 0%; height: 100%; background: #00ff00; transition: width 0.1s; }
   </style>
   <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
 </head>
@@ -38,6 +40,7 @@
       <input type="text" id="room_id" readonly>
       <button id="btn_start">トラッキング ＆ 送信開始</button>
       <div id="conn_status">VRMを選択してください</div>
+      <div id="mic_bar_bg"><div id="mic_bar_fill"></div></div>
       <div class="stats" id="conn_count">接続中の受信者: 0</div>
     </div>
 
@@ -53,253 +56,6 @@
       <input type="range" id="s_blink" min="1.0" max="3.0" step="0.1" value="1.5">
     </div>
     <div class="control-group">
-      <label>眉毛の感度: <span id="v_brow">1.5</span></label>
-      <input type="range" id="s_brow" min="0.0" max="3.0" step="0.1" value="1.5">
+      <label>マイク感度(口パク): <span id="v_mic">2.5</span></label>
+      <input type="range" id="s_mic" min="0.5" max="10.0" step="0.1" value="2.5">
     </div>
-    <div class="control-group">
-      <label>マイク感度(口パク): <span id="v_mic">1.5</span></label>
-      <input type="range" id="s_mic" min="0.5" max="5.0" step="0.1" value="1.5">
-    </div>
-    <div class="control-group">
-      <label>高さ調整: <span id="v_h">0.0</span></label>
-      <input type="range" id="s_h" min="-0.5" max="0.5" step="0.01" value="0.0">
-    </div>
-    <div class="control-group">
-      <label>左腕の角度: <span id="v_l">0</span>°</label>
-      <input type="range" id="s_l" min="-90" max="90" step="1" value="0">
-    </div>
-    <div class="control-group">
-      <label>右腕の角度: <span id="v_r">0</span>°</label>
-      <input type="range" id="s_r" min="-90" max="90" step="1" value="0">
-    </div>
-  </div>
-
-  <div id="video_ui"><video id="input_video" autoplay playsinline></video></div>
-
-  <script type="importmap">
-    {
-      "imports": {
-        "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
-        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/",
-        "@pixiv/three-vrm": "https://cdn.jsdelivr.net/npm/@pixiv/three-vrm@2.1.0/lib/three-vrm.module.js",
-        "@mediapipe/tasks-vision": "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.3/vision_bundle.mjs"
-      }
-    }
-  </script>
-
-  <script type="module">
-    import * as THREE from 'three';
-    import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-    import { VRMLoaderPlugin } from '@pixiv/three-vrm';
-    import { FaceLandmarker, FilesetResolver } from '@mediapipe/tasks-vision';
-
-    const video = document.getElementById("input_video");
-    const connStatus = document.getElementById("conn_status");
-    const connCountEl = document.getElementById("conn_count");
-    const vrmInput = document.getElementById("vrm_file");
-    const roomIdInput = document.getElementById("room_id");
-    
-    // スライダー群
-    const s_h = document.getElementById("s_h");
-    const s_l = document.getElementById("s_l");
-    const s_r = document.getElementById("s_r");
-    const s_blink = document.getElementById("s_blink");
-    const s_brow = document.getElementById("s_brow");
-    const s_mic = document.getElementById("s_mic");
-
-    let currentVrm, faceLandmarker, lastVideoTime = -1;
-    let peer, connections = [], currentVrmUrl = null;
-    let audioContext, analyser, dataArray, currentVolume = 0;
-    
-    // 正面リセット用
-    let offsetRotation = new THREE.Quaternion();
-    let shouldResetPose = false;
-
-    // --- Peer ID 設定 ---
-    const savedId = localStorage.getItem("vrm_host_id") || "vrm-" + Math.random().toString(36).substring(2, 12);
-    localStorage.setItem("vrm_host_id", savedId);
-    roomIdInput.value = savedId;
-    
-    roomIdInput.onclick = () => {
-      navigator.clipboard.writeText(roomIdInput.value);
-      const originalText = connStatus.innerText;
-      connStatus.innerText = "📋 IDをコピーしました！";
-      setTimeout(() => { connStatus.innerText = originalText; }, 2000);
-    };
-
-    // 正面リセットボタン
-    document.getElementById("btn_reset_pose").onclick = () => {
-      shouldResetPose = true;
-    };
-
-    // --- VRM 読み込み ---
-    vrmInput.onchange = (e) => {
-      const file = e.target.files[0];
-      if (!file) return;
-      if (currentVrmUrl) URL.revokeObjectURL(currentVrmUrl);
-      currentVrmUrl = URL.createObjectURL(file);
-      new GLTFLoader().register(p => new VRMLoaderPlugin(p)).load(currentVrmUrl, gltf => {
-        if (currentVrm) scene.remove(currentVrm.scene);
-        currentVrm = gltf.userData.vrm;
-        scene.add(gltf.scene);
-        currentVrm.scene.scale.set(-1, 1, 1);
-        connStatus.innerText = "VRM準備OK";
-      });
-    };
-
-    // --- 開始ボタン処理 ---
-    document.getElementById("btn_start").onclick = async () => {
-      if (!currentVrm) { alert("VRMを先に選択してください"); return; }
-      
-      // マイク初期化
-      try {
-        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        audioContext = new AudioContext();
-        const source = audioContext.createMediaStreamSource(stream);
-        analyser = audioContext.createAnalyser();
-        analyser.fftSize = 256;
-        source.connect(analyser);
-        dataArray = new Uint8Array(analyser.frequencyBinCount);
-      } catch(e) { console.warn("Mic not available"); }
-
-      // PeerJS 接続
-      if (peer) peer.destroy();
-      peer = new Peer(roomIdInput.value);
-      peer.on('open', id => { 
-        connStatus.innerText = "配信中: " + id;
-        connStatus.style.color = "#00ff00";
-      });
-      peer.on('connection', conn => {
-        conn.on('open', () => {
-          connections.push(conn);
-          updateConnectionCount();
-        });
-        conn.on('close', () => {
-          connections = connections.filter(c => c !== conn);
-          updateConnectionCount();
-        });
-      });
-    };
-
-    function updateConnectionCount() {
-      connCountEl.innerText = "接続中の受信者: " + connections.length;
-    }
-
-    // --- メインループ ---
-    function animate() {
-      requestAnimationFrame(animate);
-
-      // マイク音量の計算
-      if (analyser) {
-        analyser.getByteFrequencyData(dataArray);
-        let sum = dataArray.reduce((a, b) => a + b, 0);
-        currentVolume = (sum / dataArray.length) / 128.0;
-      }
-
-      if (video.currentTime !== lastVideoTime) {
-        lastVideoTime = video.currentTime;
-        const result = faceLandmarker ? faceLandmarker.detectForVideo(video, performance.now()) : null;
-        
-        const hVal = parseFloat(s_h.value);
-        const lVal = parseFloat(s_l.value);
-        const rVal = parseFloat(s_r.value);
-        const bSense = parseFloat(s_blink.value);
-        const browSense = parseFloat(s_brow.value);
-        const micSense = parseFloat(s_mic.value);
-
-        document.getElementById("v_h").innerText = hVal.toFixed(2);
-        document.getElementById("v_l").innerText = lVal;
-        document.getElementById("v_r").innerText = rVal;
-        document.getElementById("v_blink").innerText = bSense;
-        document.getElementById("v_brow").innerText = browSense;
-        document.getElementById("v_mic").innerText = micSense;
-
-        const v = { h: hVal, la: lVal, ra: rVal, b: bSense, s: {}, r: null };
-
-        if (currentVrm) {
-          // 高さ・腕
-          currentVrm.scene.position.y = v.h;
-          const armL = currentVrm.humanoid.getNormalizedBoneNode("leftUpperArm");
-          const armR = currentVrm.humanoid.getNormalizedBoneNode("rightUpperArm");
-          if(armL) armL.rotation.z = THREE.MathUtils.degToRad(v.la);
-          if(armR) armR.rotation.z = THREE.MathUtils.degToRad(-v.ra);
-
-          const exp = currentVrm.expressionManager;
-
-          // 表情
-          if (result && result.faceBlendshapes.length > 0) {
-　　　　　   const shapes = {};
-            result.faceBlendshapes[0].categories.forEach(c => { shapes[c.categoryName] = c.score; });
-
-            const exp = currentVrm.expressionManager;
-            const bSense = parseFloat(s_blink.value);
-            const micSense = parseFloat(s_mic.value);
-
-            // 1. まばたき（これだけは「表情」ではなく「動作」として扱う）
-            exp.setValue("blinkRight", Math.min(1.0, (shapes.eyeBlinkRight || 0) * bSense));
-            exp.setValue("blinkLeft", Math.min(1.0, (shapes.eyeBlinkLeft || 0) * bSense));
-
-           // 2. 口パク（マイクの音量だけで「Aa」の形を動かす）
-           // カメラの口認識（jawOpenなど）は一切無視します
-           const mouthOpen = Math.min(1.0, currentVolume * micSense);
-           exp.setValue("aa", mouthOpen);
-
-           // 3. 他の「sad」「angry」「happy」「surprised」などは一切 setValue しない
-           // これにより、モデルのデフォルトの顔（素顔）が維持されます
-
-           // 受信側への送信データ
-           v.s = { 
-             eyeBlinkRight: shapes.eyeBlinkRight, 
-             eyeBlinkLeft: shapes.eyeBlinkLeft, 
-             jawOpen: mouthOpen 
-           };
-          }
-          
-          // 頭の回転 (正面リセット対応)
-          if (result && result.facialTransformationMatrixes.length > 0) {
-            const rawRot = new THREE.Quaternion().setFromRotationMatrix(new THREE.Matrix4().fromArray(result.facialTransformationMatrixes[0].data));
-            
-            if (shouldResetPose) {
-              offsetRotation.copy(rawRot).invert();
-              shouldResetPose = false;
-            }
-
-            let correctedRot = new THREE.Quaternion().multiplyQuaternions(offsetRotation, rawRot);
-            v.r = [correctedRot.x, correctedRot.y, correctedRot.z, correctedRot.w];
-            
-            const halfRot = new THREE.Quaternion().set(0,0,0,1).slerp(correctedRot, 0.5);
-            const head = currentVrm.humanoid.getNormalizedBoneNode("head");
-            const neck = currentVrm.humanoid.getNormalizedBoneNode("neck");
-            if(head && neck) { neck.quaternion.copy(halfRot); head.quaternion.copy(halfRot); }
-          }
-        }
-        connections.forEach(conn => { if (conn.open) conn.send(v); });
-      }
-      if (currentVrm) currentVrm.update(1.0/60.0);
-      renderer.render(scene, camera);
-    }
-
-    const scene = new THREE.Scene();
-    const camera = new THREE.PerspectiveCamera(30, window.innerWidth / window.innerHeight, 0.1, 20.0);
-    camera.position.set(0, 1.4, 1.5);
-    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
-    renderer.setSize(window.innerWidth, window.innerHeight);
-    document.body.appendChild(renderer.domElement);
-    scene.add(new THREE.DirectionalLight(0xffffff, Math.PI), new THREE.AmbientLight(0xffffff, 0.5));
-
-    async function setupTracking() {
-      const fileset = await FilesetResolver.forVisionTasks("https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.3/wasm");
-      faceLandmarker = await FaceLandmarker.createFromOptions(fileset, {
-        baseOptions: { modelAssetPath: `https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task`, delegate: "GPU" },
-        outputFaceBlendshapes: true, outputFacialTransformationMatrixes: true, runningMode: "VIDEO"
-      });
-      const stream = await navigator.mediaDevices.getUserMedia({ video: { width: 640, height: 480 } });
-      video.srcObject = stream;
-      video.onloadeddata = animate;
-    }
-
-    setupTracking();
-  </script>
-</body>
-</html>
-
