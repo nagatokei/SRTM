@@ -10,6 +10,8 @@
     label { display: block; font-size: 11px; margin-bottom: 3px; color: #ccc; }
     input[type="range"] { width: 100%; cursor: pointer; }
     input[type="text"], input[type="file"] { width: 100%; padding: 5px; background: #222; color: #fff; border: 1px solid #666; border-radius: 4px; box-sizing: border-box; font-size: 12px; }
+    /* ID入力欄をクリック可能に見せるためのスタイル */
+    #room_id { cursor: copy; border-color: #0078d4; } 
     button { width: 100%; padding: 8px; cursor: pointer; background: #0078d4; color: white; border: none; border-radius: 4px; font-weight: bold; margin-top: 10px; }
     button:hover { background: #005a9e; }
     #video_ui { position: absolute; bottom: 10px; right: 10px; width: 160px; opacity: 0.5; }
@@ -30,8 +32,8 @@
     </div>
 
     <div class="control-group">
-      <label>2. My ID (合言葉):</label>
-      <input type="text" id="room_id" placeholder="例: my-avatar-room">
+      <label>2. My ID (クリックでコピー):</label>
+      <input type="text" id="room_id" readonly placeholder="生成中...">
       <button id="btn_start">送信準備・待機開始</button>
       <div id="conn_status">VRMを選択してください</div>
       <div class="stats" id="conn_count">接続中の受信者: 0</div>
@@ -89,7 +91,6 @@
     let currentVrm, faceLandmarker, lastVideoTime = -1;
     let peer, connections = [], currentVrmUrl = null;
 
-    // VRM読み込み
     vrmInput.onchange = (e) => {
       const file = e.target.files[0];
       if (!file) return;
@@ -105,11 +106,26 @@
       });
     };
 
-    // ホスト設定（複数接続対応）
     function setupHost() {
       const btn = document.getElementById("btn_start");
       const roomIdInput = document.getElementById("room_id");
       
+      // 💡 保存されたIDをロード、なければ乱数生成
+      let savedId = localStorage.getItem("vrm_host_id");
+      if (!savedId) {
+        savedId = "vrm-" + Math.random().toString(36).substring(2, 12);
+        localStorage.setItem("vrm_host_id", savedId);
+      }
+      roomIdInput.value = savedId;
+
+      // 💡 IDをクリックでコピー
+      roomIdInput.onclick = () => {
+        navigator.clipboard.writeText(roomIdInput.value);
+        const originalText = connStatus.innerText;
+        connStatus.innerText = "📋 IDをコピーしました！";
+        setTimeout(() => { connStatus.innerText = originalText; }, 2000);
+      };
+
       btn.onclick = () => {
         if (!currentVrm) { alert("先にVRMを選択してください"); return; }
         if (peer) peer.destroy();
@@ -117,7 +133,7 @@
         peer = new Peer(roomIdInput.value); 
 
         peer.on('open', id => { 
-          connStatus.innerText = "受信待機中: " + id; 
+          connStatus.innerText = "待機中: " + id; 
           connStatus.style.color = "#ffcc00"; 
         });
 
@@ -128,7 +144,6 @@
             connStatus.innerText = "受信者が接続中";
             connStatus.style.color = "#00ff00";
           });
-
           conn.on('close', () => {
             connections = connections.filter(c => c !== conn);
             updateConnectionCount();
@@ -147,7 +162,6 @@
       });
     }
 
-    // Three.js設定
     const scene = new THREE.Scene();
     const camera = new THREE.PerspectiveCamera(30, window.innerWidth / window.innerHeight, 0.1, 20.0);
     camera.position.set(0, 1.4, 1.5);
@@ -175,12 +189,10 @@
       if (video.currentTime !== lastVideoTime) {
         lastVideoTime = video.currentTime;
         const result = faceLandmarker ? faceLandmarker.detectForVideo(video, performance.now()) : null;
-        
         const hVal = parseFloat(s_h.value);
         const lVal = parseFloat(s_l.value);
         const rVal = parseFloat(s_r.value);
         const bVal = parseFloat(s_blink.value);
-
         const v = { h: hVal, la: lVal, ra: rVal, b: bVal, s: {}, r: null };
         
         document.getElementById("v_h").innerText = hVal.toFixed(2);
@@ -214,7 +226,6 @@
             if(head && neck) { neck.quaternion.copy(halfRot); head.quaternion.copy(halfRot); }
           }
         }
-        // 💡 繋がっている全員に一斉送信
         broadcast(v);
       }
       if (currentVrm) currentVrm.update(1.0/60.0);
