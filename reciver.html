@@ -2,48 +2,43 @@
 <html>
 <head>
   <meta charset="utf-8">
-  <title>VRM Receiver (Window Hover & Auto Reconnect)</title>
+  <title>VRM Stable Receiver</title>
   <style>
-    body { 
-      margin: 0; background: transparent; overflow: hidden; font-family: sans-serif;
-      width: 100vw; height: 100vh;
-    }
-    /* 💡 ウィンドウ全体(body)にマウスが乗ったらUIを表示 */
-    #ui { 
-      position: absolute; top: 10px; left: 10px; z-index: 100; 
-      background: rgba(0,0,0,0.9); padding: 15px; border-radius: 8px; 
-      color: white; border: 1px solid #555; width: 240px; 
-      opacity: 0; pointer-events: none; transition: opacity 0.3s ease;
-    }
-    body:hover #ui { opacity: 1; pointer-events: auto; }
+    body { margin: 0; background: transparent; color: white; font-family: sans-serif; overflow: hidden; width: 100vw; height: 100vh; }
     
-    /* 💡 未接続時やエラー時は強制表示 */
-    #ui.force-show { opacity: 1; pointer-events: auto; }
+    /* 💡 UIパネル：初期状態で「force-show」をつけて確実に表示させる */
+    #ui_panel { 
+      position: absolute; top: 10px; left: 10px; background: rgba(0,0,0,0.8); 
+      padding: 15px; z-index: 100; border-radius: 8px; width: 260px;
+      transition: opacity 0.3s; opacity: 1; pointer-events: auto;
+    }
+    /* 💡 接続後は「マウスが乗ったときだけ」見えるようにする */
+    #ui_panel.connected { opacity: 0; pointer-events: none; }
+    body:hover #ui_panel { opacity: 1; pointer-events: auto; }
 
-    label { font-size: 11px; color: #ccc; display: block; margin: 8px 0 4px; }
-    input { 
-      background: #222; color: white; border: 1px solid #666; padding: 6px; 
-      border-radius: 4px; width: 100%; box-sizing: border-box; font-size: 12px; 
-    }
-    button { 
-      width: 100%; padding: 8px; cursor: pointer; background: #28a745; 
-      color: white; border: none; border-radius: 4px; font-weight: bold; margin-top: 10px; 
-    }
-    #status { font-size: 11px; margin-top: 8px; text-align: center; color: #ffcc00; }
+    .control-group { margin-bottom: 10px; }
+    label { display: block; font-size: 11px; color: #ccc; margin-bottom: 4px; }
+    input { width: 100%; padding: 6px; background: #222; color: #fff; border: 1px solid #666; border-radius: 4px; box-sizing: border-box; }
+    button { width: 100%; padding: 10px; cursor: pointer; background: #28a745; color: white; border: none; border-radius: 4px; font-weight: bold; margin-top: 10px; }
+    #status { font-size: 12px; color: #ffcc00; margin-top: 8px; text-align: center; }
   </style>
+  <!-- PeerJSを確実に読み込む -->
   <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
 </head>
 <body>
 
-  <div id="ui" class="force-show">
-    <b style="font-size: 13px;">VRM Receiver</b>
-    <label>1. VRMを選択:</label>
-    <input type="file" id="vrm_file" accept=".vrm">
-    <label>2. 接続先ID (合言葉):</label>
-    <!-- 伏せ字にしたい場合は type="password" に変更してください -->
-    <input type="text" id="target_id" placeholder="IDを入力">
-    <button id="btn_connect">Connect</button>
-    <div id="status">VRMを選択してください</div>
+  <div id="ui_panel">
+    <b style="font-size: 14px;">Receiver Settings</b>
+    <div class="control-group" style="margin-top:10px;">
+      <label>1. 使用するVRMを選択:</label>
+      <input type="file" id="vrm_file" accept=".vrm">
+    </div>
+    <div class="control-group">
+      <label>2. 合言葉 (ID):</label>
+      <input type="text" id="target_id" placeholder="IDを入力">
+      <button id="btn_connect">Connect</button>
+    </div>
+    <div id="status">VRMを選択してConnectを押してください</div>
   </div>
 
   <script type="importmap">
@@ -61,122 +56,116 @@
     import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
     import { VRMLoaderPlugin } from '@pixiv/three-vrm';
 
-    const uiPanel = document.getElementById("ui");
     const statusEl = document.getElementById("status");
-    const vrmInput = document.getElementById("vrm_file");
+    const uiPanel = document.getElementById("ui_panel");
     const targetInput = document.getElementById("target_id");
-    
     let currentVrm, scene, camera, renderer, currentVrmUrl;
-    let peer = null, conn = null, reconnectTimer = null;
+    let peer, conn, reconnectTimer = null;
 
-    // 💡 IDの復元
-    window.onload = () => {
-      const savedId = localStorage.getItem("vrm_receive_id");
-      if (savedId) targetInput.value = savedId;
-    };
+    // 💡 保存されたIDを読み込む
+    const saved = localStorage.getItem("vrm_receive_id");
+    if (saved) targetInput.value = saved;
 
-    // --- Scene Setup ---
-    scene = new THREE.Scene();
-    camera = new THREE.PerspectiveCamera(30, window.innerWidth / window.innerHeight, 0.1, 20.0);
-    camera.position.set(0, 1.4, 1.5);
-    renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
-    renderer.setSize(window.innerWidth, window.innerHeight);
-    renderer.setClearColor(0x000000, 0); 
-    document.body.appendChild(renderer.domElement);
-    scene.add(new THREE.DirectionalLight(0xffffff, Math.PI), new THREE.AmbientLight(0xffffff, 0.5));
-
-    vrmInput.onchange = (e) => {
+    // VRM読み込み
+    document.getElementById("vrm_file").onchange = (e) => {
       const file = e.target.files[0];
       if (!file) return;
       if (currentVrmUrl) URL.revokeObjectURL(currentVrmUrl);
       currentVrmUrl = URL.createObjectURL(file);
-      loadVrm(currentVrmUrl);
+      loadVRM(currentVrmUrl);
     };
 
-    function loadVrm(url) {
-      statusEl.innerText = "Loading...";
+    function loadVRM(url) {
+      statusEl.innerText = "VRM読み込み中...";
       new GLTFLoader().register(p => new VRMLoaderPlugin(p)).load(url, gltf => {
         if (currentVrm) scene.remove(currentVrm.scene);
         currentVrm = gltf.userData.vrm;
         scene.add(gltf.scene);
         currentVrm.scene.scale.set(-1, 1, 1);
-        statusEl.innerText = "VRM Ready!";
+        statusEl.innerText = "VRM準備完了！";
+      }, undefined, (err) => {
+        statusEl.innerText = "VRM読込エラー";
       });
     }
 
-    // --- 💡 接続メイン（古い方の「確実に動く」構造を継承） ---
-    function startConnection() {
+    // 💡 動いていた「古い方のロジック」を完全再現
+    function connectToSender() {
       const targetId = targetInput.value;
       if (!currentVrm || !targetId) { 
-        statusEl.innerText = "VRMとIDが必要です"; 
+        alert("VRMの選択とIDの入力が必要です"); 
         return; 
       }
       
       localStorage.setItem("vrm_receive_id", targetId);
 
       if (peer) peer.destroy();
-      peer = new Peer(); // 💡 ボタンを押してから作る
-
+      // ボタンを押したときにPeerを作る（これが一番安定する）
+      peer = new Peer();
+      
       peer.on('open', () => {
-        statusEl.innerText = "Connecting...";
+        statusEl.innerText = "接続試行中...";
         conn = peer.connect(targetId);
-
+        
         conn.on('open', () => {
           statusEl.innerText = "Connected!";
           statusEl.style.color = "#00ff00";
-          uiPanel.classList.remove("force-show");
+          uiPanel.classList.add("connected"); // ここで隠す
           if (reconnectTimer) { clearInterval(reconnectTimer); reconnectTimer = null; }
         });
-
-        conn.on('data', data => updateVrm(data));
         
-        conn.on('close', () => {
-          statusEl.innerText = "Disconnected. Retry...";
-          statusEl.style.color = "#ff4444";
-          uiPanel.classList.add("force-show");
-          triggerReconnect();
+        conn.on('data', data => {
+          if (!currentVrm) return;
+          // 受信データ反映
+          currentVrm.scene.position.y = data.h;
+          const armL = currentVrm.humanoid.getNormalizedBoneNode("leftUpperArm");
+          const armR = currentVrm.humanoid.getNormalizedBoneNode("rightUpperArm");
+          if(armL) armL.rotation.z = THREE.MathUtils.degToRad(data.la);
+          if(armR) armR.rotation.z = THREE.MathUtils.degToRad(-data.ra);
+
+          if (data.r) {
+            const head = currentVrm.humanoid.getNormalizedBoneNode("head");
+            const neck = currentVrm.humanoid.getNormalizedBoneNode("neck");
+            const rot = new THREE.Quaternion().fromArray(data.r);
+            const halfRot = new THREE.Quaternion().set(0,0,0,1).slerp(rot, 0.5);
+            if(head && neck) { neck.quaternion.copy(halfRot); head.quaternion.copy(halfRot); }
+          }
+          if (data.s) {
+            const exp = currentVrm.expressionManager;
+            const adj = (s) => Math.min(1.0, s > 0.1 ? s * data.b : 0);
+            exp.setValue("blinkRight", adj(data.s.eyeBlinkRight || 0));
+            exp.setValue("blinkLeft", adj(data.s.eyeBlinkLeft || 0));
+            exp.setValue("aa", data.s.jawOpen || 0);
+          }
         });
+
+        conn.on('close', startReconnect);
       });
 
       peer.on('error', (err) => {
-        console.error(err);
-        triggerReconnect();
+        console.error("Peer Error:", err);
+        startReconnect();
       });
     }
 
-    function triggerReconnect() {
+    function startReconnect() {
       if (reconnectTimer) return;
-      reconnectTimer = setInterval(() => {
-        console.log("再接続を試みています...");
-        startConnection();
-      }, 5000);
+      statusEl.innerText = "切断されました。再接続中...";
+      statusEl.style.color = "#ff4444";
+      uiPanel.classList.remove("connected");
+      reconnectTimer = setInterval(connectToSender, 5000);
     }
 
-    document.getElementById("btn_connect").onclick = startConnection;
+    document.getElementById("btn_connect").onclick = connectToSender;
 
-    function updateVrm(data) {
-      if (!currentVrm) return;
-      currentVrm.scene.position.y = data.h;
-      const armL = currentVrm.humanoid.getNormalizedBoneNode("leftUpperArm");
-      const armR = currentVrm.humanoid.getNormalizedBoneNode("rightUpperArm");
-      if(armL) armL.rotation.z = THREE.MathUtils.degToRad(data.la);
-      if(armR) armR.rotation.z = THREE.MathUtils.degToRad(-data.ra);
-
-      if (data.r) {
-        const head = currentVrm.humanoid.getNormalizedBoneNode("head");
-        const neck = currentVrm.humanoid.getNormalizedBoneNode("neck");
-        const rot = new THREE.Quaternion().fromArray(data.r);
-        const halfRot = new THREE.Quaternion().set(0,0,0,1).slerp(rot, 0.5);
-        if(head && neck) { neck.quaternion.copy(halfRot); head.quaternion.copy(halfRot); }
-      }
-      if (data.s) {
-        const exp = currentVrm.expressionManager;
-        const adj = (s) => Math.min(1.0, s > 0.1 ? s * data.b : 0);
-        exp.setValue("blinkRight", adj(data.s.eyeBlinkRight || 0));
-        exp.setValue("blinkLeft", adj(data.s.eyeBlinkLeft || 0));
-        exp.setValue("aa", data.s.jawOpen || 0);
-      }
-    }
+    // Three.js 描画設定
+    scene = new THREE.Scene();
+    camera = new THREE.PerspectiveCamera(30, window.innerWidth / window.innerHeight, 0.1, 20.0);
+    camera.position.set(0, 1.4, 1.5);
+    renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.setClearColor(0x000000, 0);
+    document.body.appendChild(renderer.domElement);
+    scene.add(new THREE.DirectionalLight(0xffffff, Math.PI), new THREE.AmbientLight(0xffffff, 0.5));
 
     function animate() {
       requestAnimationFrame(animate);
