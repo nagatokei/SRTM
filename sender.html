@@ -2,7 +2,7 @@
 <html>
 <head>
   <meta charset="utf-8">
-  <title>VRM Sender (Device Select & Brow Tracking)</title>
+  <title>VRM Sender (Final Optimized)</title>
   <style>
     body { margin: 0; background: #000; color: white; font-family: sans-serif; overflow: hidden; }
     #ui_panel { position: absolute; top: 10px; left: 10px; background: rgba(0,0,0,0.85); padding: 15px; z-index: 10; border-radius: 8px; border: 1px solid #555; width: 280px; max-height: 90vh; overflow-y: auto; }
@@ -23,7 +23,7 @@
 <body>
 
   <div id="ui_panel">
-    <b style="font-size: 14px;">VRM Sender (Advanced)</b>
+    <b style="font-size: 14px;">VRM Sender (Host)</b>
     
     <div class="control-group" style="margin-top:15px;">
       <label>1. デバイス選択:</label>
@@ -40,7 +40,7 @@
       <label>3. ID (クリックコピー):</label>
       <input type="text" id="room_id" readonly>
       <button id="btn_start">送信 & トラッキング開始</button>
-      <div id="conn_status">デバイスとVRMを選んでください</div>
+      <div id="conn_status">準備完了</div>
     </div>
 
     <hr style="border: 0; border-top: 1px solid #444; margin: 10px 0;">
@@ -95,6 +95,7 @@
     const connStatus = document.getElementById("conn_status");
     const camSelect = document.getElementById("select_camera");
     const micSelect = document.getElementById("select_mic");
+    const vrmInput = document.getElementById("vrm_file");
     
     const s_h = document.getElementById("s_h");
     const s_pitch = document.getElementById("s_pitch");
@@ -106,29 +107,22 @@
     let offsetRotation = new THREE.Quaternion();
     let shouldResetPose = false;
 
-    // 音声解析・デバイス用
     let audioContext, analyser, dataArray;
     let currentVolume = 0;
 
-    // --- デバイスの列挙 ---
     async function listDevices() {
-      // 権限を取得するために一度ダミーで呼び出す
       await navigator.mediaDevices.getUserMedia({ audio: true, video: true });
       const devices = await navigator.mediaDevices.enumerateDevices();
-      
-      camSelect.innerHTML = "";
-      micSelect.innerHTML = "";
-      
+      camSelect.innerHTML = ""; micSelect.innerHTML = "";
       devices.forEach(device => {
         const option = document.createElement("option");
         option.value = device.deviceId;
-        option.text = device.label || `${device.kind} (${device.deviceId.slice(0, 5)})`;
+        option.text = device.label || `${device.kind}`;
         if (device.kind === "videoinput") camSelect.appendChild(option);
         else if (device.kind === "audioinput") micSelect.appendChild(option);
       });
     }
 
-    // --- マイク初期化 (選択されたデバイスを使用) ---
     async function initAudio(deviceId) {
       if (audioContext) audioContext.close();
       const stream = await navigator.mediaDevices.getUserMedia({ audio: { deviceId: { exact: deviceId } } });
@@ -140,7 +134,6 @@
       dataArray = new Uint8Array(analyser.frequencyBinCount);
     }
 
-    // --- カメラ初期化 (選択されたデバイスを使用) ---
     async function initCamera(deviceId) {
       const stream = await navigator.mediaDevices.getUserMedia({ video: { deviceId: { exact: deviceId }, width: 640, height: 480 } });
       video.srcObject = stream;
@@ -156,7 +149,8 @@
         currentVrm = gltf.userData.vrm;
         scene.add(gltf.scene);
         currentVrm.scene.scale.set(-1, 1, 1);
-        connStatus.innerText = "VRM読み込み完了";
+        // 利用可能なモーフ名をコンソールに出力（眉毛のデバッグ用）
+        console.log("利用可能なモーフ:", currentVrm.expressionManager.expressions.map(e => e.expressionName));
       });
     };
 
@@ -172,10 +166,8 @@
 
       btn.onclick = async () => {
         if (!currentVrm) { alert("VRMを選択してください"); return; }
-        
         await initAudio(micSelect.value);
         await initCamera(camSelect.value);
-
         if (peer) peer.destroy();
         peer = new Peer(roomIdInput.value); 
         peer.on('open', id => { connStatus.innerText = "待機中: " + id; });
@@ -186,11 +178,8 @@
       };
     }
 
-    // --- メインループ ---
     function animate() {
       requestAnimationFrame(animate);
-      
-      // 音量更新
       if (analyser) {
         analyser.getByteFrequencyData(dataArray);
         let sum = dataArray.reduce((a, b) => a + b, 0);
@@ -221,75 +210,8 @@
             const shapes = {};
             result.faceBlendshapes[0].categories.forEach(c => { shapes[c.categoryName] = c.score; });
 
-            // まばたき
+            // まばたき (カメラ)
             exp.setValue("blinkRight", Math.min(1.0, (shapes.eyeBlinkRight || 0) * 1.5));
             exp.setValue("blinkLeft", Math.min(1.0, (shapes.eyeBlinkLeft || 0) * 1.5));
 
-            // 2. 💡 眉毛を独立して動かす
-　　　　　   // 感度(bSense)を調整して、自分の眉の動きをVRMに反映
-　　　 　　  const bSense = parseFloat(s_brow.value);
-
-　　　 　　  // 眉を上げる動き (驚き・眉上げ)
- 　　 　　　 // VRM 1.0の標準的な名前、またはカスタムモーフ名を指定
-　　　 　　  const browUpL = Math.min(1.0, (shapes.browInnerUp || 0) * bSense);
-　　　 　　  const browUpR = Math.min(1.0, (shapes.browInnerUp || 0) * bSense); 
-
-　　　 　　  // 眉を下げる動き (怒り・ひそめる)
-　 　　　　  const browDownL = Math.min(1.0, (shapes.browDownLeft || 0) * bSense);
-　　　　　   const browDownR = Math.min(1.0, (shapes.browDownRight || 0) * bSense);
-            
-            // リップシンク (マイク音量)
-            const mouthOpen = Math.min(1.0, currentVolume * mVal);
-            exp.setValue("aa", mouthOpen);
-            v.s = { jawOpen: mouthOpen, eyeBlinkRight: shapes.eyeBlinkRight, eyeBlinkLeft: shapes.eyeBlinkLeft };
-          }
-
-          // 頭の回転
-          if (result && result.facialTransformationMatrixes.length > 0) {
-            const rawRot = new THREE.Quaternion().setFromRotationMatrix(new THREE.Matrix4().fromArray(result.facialTransformationMatrixes[0].data));
-            if (shouldResetPose) { offsetRotation.copy(rawRot).invert(); shouldResetPose = false; }
-            let correctedRot = new THREE.Quaternion().multiplyQuaternions(offsetRotation, rawRot);
-            const pitchOffset = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), THREE.MathUtils.degToRad(pVal));
-            correctedRot.multiplyQuaternions(pitchOffset, correctedRot);
-            v.r = [correctedRot.x, correctedRot.y, correctedRot.z, correctedRot.w];
-            const halfRot = new THREE.Quaternion().set(0,0,0,1).slerp(correctedRot, 0.5);
-            const head = currentVrm.humanoid.getNormalizedBoneNode("head");
-            const neck = currentVrm.humanoid.getNormalizedBoneNode("neck");
-            if(head && neck) { neck.quaternion.copy(halfRot); head.quaternion.copy(halfRot); }
-          }
-        }
-        if (peer) connections.forEach(conn => { if (conn.open) conn.send(v); });
-      }
-      if (currentVrm) currentVrm.update(1.0/60.0);
-      renderer.render(scene, camera);
-    }
-
-    // --- 初期設定 ---
-    const scene = new THREE.Scene();
-    const camera = new THREE.PerspectiveCamera(30, window.innerWidth / window.innerHeight, 0.1, 20.0);
-    camera.position.set(0, 1.4, 1.5);
-    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
-    renderer.setSize(window.innerWidth, window.innerHeight);
-    document.body.appendChild(renderer.domElement);
-    scene.add(new THREE.DirectionalLight(0xffffff, Math.PI), new THREE.AmbientLight(0xffffff, 0.5));
-
-    async function start() {
-      await listDevices();
-      const fileset = await FilesetResolver.forVisionTasks("https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.3/wasm");
-      faceLandmarker = await FaceLandmarker.createFromOptions(fileset, {
-        baseOptions: { modelAssetPath: `https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task`, delegate: "GPU" },
-        outputFaceBlendshapes: true, outputFacialTransformationMatrixes: true, runningMode: "VIDEO"
-      });
-      setupHost();
-      animate();
-    }
-    start();
-
-    window.onresize = () => {
-      camera.aspect = window.innerWidth / window.innerHeight;
-      camera.updateProjectionMatrix();
-      renderer.setSize(window.innerWidth, window.innerHeight);
-    };
-  </script>
-</body>
-</html>
+            // 💡 眉毛トラ
