@@ -65,8 +65,9 @@
     // 💡 変数宣言 (scene, camera, rendererを忘れずに!)
     let currentVrm, scene, camera, renderer, peer, conn, currentVrmUrl;
     let reconnectTimer = null;
-
-  　const updateIdStatus = () => {
+    let targetData = { h: 1.4, la: 0, ra: 0, r: [0, 0, 0, 1], s: null, b: 1.0 };
+  　
+    const updateIdStatus = () => {
       if (targetInput.value.length > 0) {
         statusEl.innerText = "● IDが入力されました";
         statusEl.style.color = "#00ff00";
@@ -150,19 +151,9 @@
     document.getElementById("btn_connect").onclick = connectToSender;
 
     function updateVrm(data) {
-      currentVrm.scene.position.y = data.h;
-      const armL = currentVrm.humanoid.getNormalizedBoneNode("leftUpperArm");
-      const armR = currentVrm.humanoid.getNormalizedBoneNode("rightUpperArm");
-      if(armL) armL.rotation.z = THREE.MathUtils.degToRad(data.la);
-      if(armR) armR.rotation.z = THREE.MathUtils.degToRad(-data.ra);
-
-      if (data.r) {
-        const head = currentVrm.humanoid.getNormalizedBoneNode("head");
-        const neck = currentVrm.humanoid.getNormalizedBoneNode("neck");
-        const rot = new THREE.Quaternion().fromArray(data.r);
-        const halfRot = new THREE.Quaternion().set(0,0,0,1).slerp(rot, 0.5);
-        if(head && neck) { neck.quaternion.copy(halfRot); head.quaternion.copy(halfRot); }
-      }
+      targetData = data; // 直接動かさず、目標地点を上書きするだけ
+    }
+   
       if (data.s) {
         const exp = currentVrm.expressionManager;
         const adj = (s) => Math.min(1.0, s > 0.1 ? s * data.b : 0);
@@ -184,7 +175,55 @@
 
     function animate() {
       requestAnimationFrame(animate);
-      if (currentVrm) currentVrm.update(1.0/60.0);
+      
+      if (currentVrm && targetData) {
+        const lerpSpeed = 0.15; // ヌルヌル具合（0.1〜0.2くらいがおすすめ）
+
+        // 1. 高さの補間
+        currentVrm.scene.position.y += (targetData.h - currentVrm.scene.position.y) * lerpSpeed;
+
+        // 2. 腕の角度の補間
+        const armL = currentVrm.humanoid.getNormalizedBoneNode("leftUpperArm");
+        const armR = currentVrm.humanoid.getNormalizedBoneNode("rightUpperArm");
+        if(armL) {
+          const targetL = THREE.MathUtils.degToRad(targetData.la);
+          armL.rotation.z += (targetL - armL.rotation.z) * lerpSpeed;
+        }
+        if(armR) {
+          const targetR = THREE.MathUtils.degToRad(-targetData.ra);
+          armR.rotation.z += (targetR - armR.rotation.z) * lerpSpeed;
+        }
+
+        // 3. 頭と首の回転（クォータニオン）の補間
+        if (targetData.r) {
+          const head = currentVrm.humanoid.getNormalizedBoneNode("head");
+          const neck = currentVrm.humanoid.getNormalizedBoneNode("neck");
+          const targetQuat = new THREE.Quaternion().fromArray(targetData.r);
+          // 首と頭に半分ずつ回転を分ける
+          const halfQuat = new THREE.Quaternion().set(0,0,0,1).slerp(targetQuat, 0.5);
+          
+          if(head && neck) {
+            neck.quaternion.slerp(halfQuat, lerpSpeed);
+            head.quaternion.slerp(halfQuat, lerpSpeed);
+          }
+        }
+
+        // 4. 表情の補間
+        if (targetData.s) {
+          const exp = currentVrm.expressionManager;
+          const adj = (current, target) => current + (target - current) * lerpSpeed;
+          
+          const br = Math.min(1.0, (targetData.s.eyeBlinkRight || 0) > 0.1 ? targetData.s.eyeBlinkRight * (targetData.b || 1) : 0);
+          const bl = Math.min(1.0, (targetData.s.eyeBlinkLeft || 0) > 0.1 ? targetData.s.eyeBlinkLeft * (targetData.b || 1) : 0);
+          const jo = targetData.s.jawOpen || 0;
+
+          exp.setValue("blinkRight", adj(exp.getValue("blinkRight") || 0, br));
+          exp.setValue("blinkLeft", adj(exp.getValue("blinkLeft") || 0, bl));
+          exp.setValue("aa", adj(exp.getValue("aa") || 0, jo));
+        }
+
+        currentVrm.update(1.0/60.0);
+      }
       renderer.render(scene, camera);
     }
     animate();
@@ -197,5 +236,6 @@
   </script>
 </body>
 </html>
+
 
 
