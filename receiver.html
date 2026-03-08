@@ -65,7 +65,7 @@
     // 💡 変数宣言 (scene, camera, rendererを忘れずに!)
     let currentVrm, scene, camera, renderer, peer, conn, currentVrmUrl;
     let reconnectTimer = null;
-    let targetData = { h: 1.4, la: 0, ra: 0, r: [0, 0, 0, 1], s: null, b: 1.0 };
+    let targetData = { h: 0, la: 0, ra: 0, r: [0, 0, 0, 1], s: null, b: 1.0 };
   　
     const updateIdStatus = () => {
       if (targetInput.value.length > 0) {
@@ -227,6 +227,7 @@
   </script>
 </body>
 </html>
+
 
 
 
