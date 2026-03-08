@@ -35,10 +35,11 @@
       <input type="file" id="vrm_file" accept=".vrm">
     </div>
     <div class="control-group">
-      <label>2. 送信者のID):</label>
-      <input type="password" id="target_id" placeholder="IDを入力">
-      <button id="btn_connect">Connect</button>
-    </div>
+  <label>2. 送信者のID:</label>
+  <input type="password" id="target_id" placeholder="CTRL＋Vでペースト" 
+         style="color: transparent; text-shadow: 0 0 0 transparent; caret-color: transparent;">
+  <button id="btn_connect">Connect</button>
+</div>
     <div id="status">VRMを選択してConnectを押してください</div>
   </div>
 
@@ -65,10 +66,25 @@
     let currentVrm, scene, camera, renderer, peer, conn, currentVrmUrl;
     let reconnectTimer = null;
 
+  　const updateIdStatus = () => {
+      if (targetInput.value.length > 0) {
+        statusEl.innerText = "● IDが入力されました";
+        statusEl.style.color = "#00ff00";
+      } else {
+        statusEl.innerText = "IDを入力してください";
+        statusEl.style.color = "#ffcc00";
+      }
+    };
+
+    targetInput.oninput = updateIdStatus; // 手動入力時
+
     // ID復元
     const saved = localStorage.getItem("vrm_receive_id");
-    if (saved) targetInput.value = saved;
-
+    if (saved) {
+      targetInput.value = saved;
+      updateIdStatus(); // 💡 復元されたときも「入力済み(緑)」にする
+    }
+    
     // VRM読み込み
     document.getElementById("vrm_file").onchange = (e) => {
       const file = e.target.files[0];
@@ -181,4 +197,5 @@
   </script>
 </body>
 </html>
+
 
