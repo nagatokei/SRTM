@@ -59,23 +59,47 @@
     let reconnectTimer = null;
     let targetData = { h: 0, la: 0, ra: 0, r: [0, 0, 0, 1], s: null, b: 1.0, s_scale: 1.0 };
 
-    // --- ✨ 自動化のための追加処理 ---
+    // --- ✨ 自動化・URL変換・ID上書き処理 ---
     const urlParams = new URLSearchParams(window.location.search);
     const urlId = urlParams.get('id');
     const urlVrm = urlParams.get('vrm');
 
-    // IDの設定（URL優先 ＞ 保存された値）
+    // 💡 IDの決定（URL優先 ＞ 保存値）
     if (urlId) {
+      // URLにIDがあれば、既存の保存値を無視して上書きセット
       targetInput.value = urlId;
+      localStorage.setItem("vrm_receive_id", urlId); 
     } else {
       const saved = localStorage.getItem("vrm_receive_id");
       if (saved) targetInput.value = saved;
     }
 
+    // 💡 共有リンクを「直リンク」に変換する関数
+    function fixDirectUrl(url) {
+      if (!url) return url;
+      let d = url;
+      // Dropbox: www.dropbox.com -> dl.dropboxusercontent.com
+      if (d.includes("www.dropbox.com")) {
+        d = d.replace("www.dropbox.com", "dl.dropboxusercontent.com").replace("?dl=0", "").replace("?dl=1", "");
+      }
+      // Google Drive: /file/d/XYZ/view -> uc?id=XYZ&export=download
+      if (d.includes("drive.google.com")) {
+        const match = d.match(/\/d\/([^\/]+)/);
+        if (match) d = `https://docs.google.com/uc?id=${match[1]}&export=download`;
+      }
+      return d;
+    }
+
+    // 💡 URLにVRM指定があれば「自動変換」して読み込み開始
+    if (urlVrm) {
+      const fixedVrmUrl = fixDirectUrl(urlVrm);
+      loadVRM(fixedVrmUrl);
+    }
+
     // 入力欄をクリックしたときに全選択（一手間を楽に）
     targetInput.onfocus = () => targetInput.select();
 
-    // VRM読み込み（手動）
+    // VRM読み込み（手動ファイル選択）
     document.getElementById("vrm_file").onchange = (e) => {
       const file = e.target.files[0];
       if (!file) return;
@@ -220,4 +244,5 @@
   </script>
 </body>
 </html>
+
 
