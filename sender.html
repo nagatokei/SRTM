@@ -41,6 +41,15 @@
       </div>
       <button id="btn_start">カメラ・マイク・配信 開始</button>
       <div id="conn_status">VRMを選択してください</div>
+   
+      <div id="live_indicator" style="display:none; font-size:12px; color:#ff4444; text-align:center; margin-top:8px; font-weight:bold; letter-spacing: 1px;">
+        <span class="blink_dot">●</span> CAMERA ACTIVE
+      </div>
+      <style>
+        .blink_dot { animation: blink 1.2s infinite; margin-right: 4px; }
+        @keyframes blink { 0% { opacity: 1; } 50% { opacity: 0.2; } 100% { opacity: 1; } }
+      </style>
+      
       <div id="mic_bar_bg"><div id="mic_bar_fill"></div></div>
     </div>
 
@@ -166,6 +175,7 @@
         if (peer) peer.destroy();
         peer = new Peer(roomIdInput.value);
         peer.on('open', id => { connStatus.innerText = "配信中: " + id; connStatus.style.color = "#00ff00"; });
+        document.getElementById("live_indicator").style.display = "block";
         peer.on('connection', conn => { conn.on('open', () => connections.push(conn)); });
       } catch(e) { alert("カメラ/マイクの起動に失敗しました"); }
     };
@@ -263,6 +273,7 @@
   </script>
 </body>
 </html>
+
 
 
 
