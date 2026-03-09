@@ -22,6 +22,7 @@
     .val-disp { float: right; color: #fff; font-weight: bold; }
   </style>
   <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+  <script src="https://unpkg.com/idb-keyval@6.2.1/dist/umd/idb-keyval-iife.min.js"></script>
 </head>
 <body>
 
@@ -125,7 +126,13 @@
     let offsetRotation = new THREE.Quaternion(), shouldResetPose = false;
 
     // ID設定
-    roomIdInput.value = "vrm-" + Math.random().toString(36).substring(2, 10);
+    // 保存されたIDがあれば使い、なければ新しく作って保存する
+    let savedRoomId = localStorage.getItem('last_room_id');
+    if (!savedRoomId) {
+      savedRoomId = "vrm-" + Math.random().toString(36).substring(2, 10);
+      localStorage.setItem('last_room_id', savedRoomId);
+    }
+    roomIdInput.value = savedRoomId;
     
     document.getElementById("btn_copy").onclick = () => {
       const roomId = document.getElementById("room_id");
@@ -144,18 +151,39 @@
     document.getElementById("btn_reset_pose").onclick = () => { shouldResetPose = true; };
 
     // VRM読み込み
-    document.getElementById("vrm_file").onchange = (e) => {
+
+       // VRM読み込み & 保存
+    document.getElementById("vrm_file").onchange = async (e) => {
       const file = e.target.files[0];
-      const url = URL.createObjectURL(file);
+      if (!file) return;
+  
+      // ブラウザに保存 (idb-keyvalを使用)
+      await idbKeyval.set('last_vrm', file);
+  
+      loadVRM(file);
+    };
+
+    // 共通の読み込み関数
+    function loadVRM(fileOrBlob) {
+      const url = URL.createObjectURL(fileOrBlob);
       new GLTFLoader().register(p => new VRMLoaderPlugin(p)).load(url, gltf => {
         if (currentVrm) scene.remove(currentVrm.scene);
         currentVrm = gltf.userData.vrm;
         scene.add(gltf.scene);
         currentVrm.scene.scale.set(-1, 1, 1);
-        connStatus.innerText = "VRM準備OK";
+        connStatus.innerText = "VRM準備OK (保存済み)";
       });
-    };
+    }
 
+    // 💡 ページ起動時に自動ロード
+    window.addEventListener('DOMContentLoaded', async () => {
+      const savedVrm = await idbKeyval.get('last_vrm');
+      if (savedVrm) {
+        connStatus.innerText = "前回のVRMを復元中...";
+        loadVRM(savedVrm);
+      }
+    });
+    
     // 開始処理 (カメラ・マイク・通信)
     document.getElementById("btn_start").onclick = async () => {
       if (!currentVrm) { alert("VRMを選択してください"); return; }
@@ -273,6 +301,7 @@
   </script>
 </body>
 </html>
+
 
 
 
