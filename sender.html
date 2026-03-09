@@ -22,7 +22,6 @@
     .val-disp { float: right; color: #fff; font-weight: bold; }
   </style>
   <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
-  <script src="https://unpkg.com/idb-keyval@6.2.1/dist/umd/idb-keyval-iife.min.js"></script>
 </head>
 <body>
 
@@ -152,13 +151,25 @@
 
     // VRM読み込み
 
-       // VRM読み込み & 保存
+    // IndexedDBの準備（保存先を作る）
+    const dbName = "VRM_Storage";
+    const storeName = "models";
+    const openDb = () => {
+      return new Promise((resolve) => {
+        const req = indexedDB.open(dbName, 1);
+        req.onupgradeneeded = (e) => e.target.result.createObjectStore(storeName);
+        req.onsuccess = (e) => resolve(e.target.result);
+      });
+    };
+
+    // VRMファイルが選択された時
     document.getElementById("vrm_file").onchange = async (e) => {
       const file = e.target.files[0];
       if (!file) return;
-  
-      // ブラウザに保存 (idb-keyvalを使用)
-      await idbKeyval.set('last_vrm', file);
+
+      // 保存
+      const db = await openDb();
+      db.transaction(storeName, "readwrite").objectStore(storeName).put(file, "last_vrm");
   
       loadVRM(file);
     };
@@ -171,19 +182,23 @@
         currentVrm = gltf.userData.vrm;
         scene.add(gltf.scene);
         currentVrm.scene.scale.set(-1, 1, 1);
-        connStatus.innerText = "VRM準備OK (保存済み)";
+        connStatus.innerText = "VRM準備OK (保存完了)";
+        connStatus.style.color = "#00ff00";
       });
     }
 
     // 💡 ページ起動時に自動ロード
-    window.addEventListener('DOMContentLoaded', async () => {
-      const savedVrm = await idbKeyval.get('last_vrm');
-      if (savedVrm) {
-        connStatus.innerText = "前回のVRMを復元中...";
-        loadVRM(savedVrm);
-      }
-    });
-    
+    (async () => {
+      const db = await openDb();
+      const req = db.transaction(storeName).objectStore(storeName).get("last_vrm");
+      req.onsuccess = () => {
+        if (req.result) {
+          connStatus.innerText = "前回のVRMを復元中...";
+          loadVRM(req.result);
+        }
+      };
+    })();
+      
     // 開始処理 (カメラ・マイク・通信)
     document.getElementById("btn_start").onclick = async () => {
       if (!currentVrm) { alert("VRMを選択してください"); return; }
@@ -301,6 +316,7 @@
   </script>
 </body>
 </html>
+
 
 
 
