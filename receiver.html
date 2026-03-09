@@ -121,6 +121,10 @@
         scene.add(gltf.scene);
         currentVrm.scene.s_scale.set(-1, 1, 1);
         statusEl.innerText = "VRM読み込み完了！";
+　　　　
+     　 const id = targetInput.value.trim();
+        if (id) connectToSender();
+        
       });
     }
 
@@ -268,6 +272,7 @@
   </script>
 </body>
 </html>
+
 
 
 
