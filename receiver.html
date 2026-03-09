@@ -2,22 +2,16 @@
 <html>
 <head>
   <meta charset="utf-8">
-  <title>VRM Stable Receiver</title>
+  <title>VRM Stable Receiver - Master</title>
   <style>
     body { margin: 0; background: transparent; color: white; font-family: sans-serif; overflow: hidden; width: 100vw; height: 100vh; }
-    
-    /* 💡 UIパネルの設定 */
     #ui_panel { 
       position: absolute; top: 10px; left: 10px; background: rgba(0,0,0,0.8); 
       padding: 15px; z-index: 100; border-radius: 8px; width: 260px;
-      transition: opacity 0.3s;
-      opacity: 1; /* 最初は見せる */
+      transition: opacity 0.3s; opacity: 1; 
     }
-
-    /* 💡 接続中(connected)は隠すが、マウスをウィンドウに乗せれば見える */
     #ui_panel.connected { opacity: 0; pointer-events: none; }
     body:hover #ui_panel { opacity: 1; pointer-events: auto; }
-
     .control-group { margin-bottom: 10px; }
     label { display: block; font-size: 11px; color: #ccc; margin-bottom: 4px; }
     input { width: 100%; padding: 6px; background: #222; color: #fff; border: 1px solid #666; border-radius: 4px; box-sizing: border-box; }
@@ -35,7 +29,7 @@
       <input type="file" id="vrm_file" accept=".vrm">
     </div>
     <div class="control-group">
-      <label>2. 送信者のID):</label>
+      <label>2. 送信者のID:</label>
       <input type="password" id="target_id" placeholder="IDを入力">
       <button id="btn_connect">Connect</button>
     </div>
@@ -61,9 +55,10 @@
     const uiPanel = document.getElementById("ui_panel");
     const targetInput = document.getElementById("target_id");
     
-    // 💡 変数宣言 (scene, camera, rendererを忘れずに!)
     let currentVrm, scene, camera, renderer, peer, conn, currentVrmUrl;
     let reconnectTimer = null;
+    
+    // 💡 ヌルヌル動かすための目標地点（初期値）
     let targetData = { h: 0, la: 0, ra: 0, r: [0, 0, 0, 1], s: null, b: 1.0, s_scale: 1.0 };
 
     // ID復元
@@ -86,13 +81,12 @@
         currentVrm = gltf.userData.vrm;
         scene.add(gltf.scene);
         currentVrm.scene.scale.set(-1, 1, 1);
-        statusEl.innerText = "VRM読み込み完了！";
+        statusEl.innerText = "VRM準備OK！";
       });
     }
 
-    // 💡 確実に動く接続ロジック
     function connectToSender() {
-      const targetId = targetInput.value;
+      const targetId = targetInput.value.trim();
       if (!currentVrm || !targetId) { alert("VRMとIDが必要です"); return; }
       
       localStorage.setItem("vrm_receive_id", targetId);
@@ -106,14 +100,12 @@
         conn.on('open', () => {
           statusEl.innerText = "Connected!";
           statusEl.style.color = "#00ff00";
-          uiPanel.classList.add("connected"); // 接続成功でUIを隠す準備
+          uiPanel.classList.add("connected");
           if (reconnectTimer) { clearInterval(reconnectTimer); reconnectTimer = null; }
         });
         
-        // 💡 ここがデータの受け取り口（これがないと動きません！）
         conn.on('data', data => {
-          if (!currentVrm) return;
-          updateVrm(data);
+          if (data) targetData = data; // データを保存するだけ（animateで補間）
         });
 
         conn.on('close', startReconnect);
@@ -134,11 +126,7 @@
 
     document.getElementById("btn_connect").onclick = connectToSender;
 
-    function updateVrm(data) {
-      targetData = data;      
-    }
-
-    // Three.js 初期化
+    // --- Three.js 初期化 ---
     scene = new THREE.Scene();
     camera = new THREE.PerspectiveCamera(30, window.innerWidth / window.innerHeight, 0.1, 20.0);
     camera.position.set(0, 1.4, 1.5);
@@ -146,69 +134,68 @@
     renderer.setSize(window.innerWidth, window.innerHeight);
     renderer.setClearColor(0x000000, 0);
     document.body.appendChild(renderer.domElement);
-    scene.add(new THREE.DirectionalLight(0xffffff, Math.PI), new THREE.AmbientLight(0xffffff, 0.5));
 
+    // --- ✨ 黄金比光源設定 ---
+    const mainLight = new THREE.DirectionalLight(0xffffff, 2.5);
+    mainLight.position.set(1.0, 2.0, 2.0);
+    scene.add(mainLight);
+    scene.add(new THREE.AmbientLight(0xffffff, 0.4));
+
+    const camLight = new THREE.PointLight(0xffffff, 0.8, 10);
+    camLight.position.set(0.38, 0.62, 1.0); // 黄金比オフセット
+    camera.add(camLight);
+    scene.add(camera);
+
+    // --- 💡 アニメーション（ヌルヌル計算） ---
     function animate() {
       requestAnimationFrame(animate);
       
       if (currentVrm && targetData) {
-        const lerpSpeed = 0.15; // 💡 この数値でヌルヌル具合を調整 (0.1〜0.2がおすすめ)
+        const lerpSpeed = 0.15;
 
-        // 1. 高さ (y)
+        // 1. 高さ
         currentVrm.scene.position.y += (targetData.h - currentVrm.scene.position.y) * lerpSpeed;
 
-        // 2. スケール (s_scale)
-        if (targetData.s_scale !== undefined) {
-          const s = targetData.s_scale;
-          const currentS = Math.abs(currentVrm.scene.scale.x);
-          const nextS = currentS + (s - currentS) * lerpSpeed;
-          currentVrm.scene.scale.set(-nextS, nextS, nextS);
-        }
+        // 2. スケール
+        const s = targetData.s_scale || 1.0;
+        const currentS = Math.abs(currentVrm.scene.scale.x);
+        const nextS = currentS + (s - currentS) * lerpSpeed;
+        currentVrm.scene.scale.set(-nextS, nextS, nextS);
 
-        // 3. 腕の回転 (la, ra)
+        // 3. 腕
         const armL = currentVrm.humanoid.getNormalizedBoneNode("leftUpperArm");
         const armR = currentVrm.humanoid.getNormalizedBoneNode("rightUpperArm");
-        if(armL) {
-          const targetL = THREE.MathUtils.degToRad(targetData.la);
-          armL.rotation.z += (targetL - armL.rotation.z) * lerpSpeed;
-        }
-        if(armR) {
-          const targetR = THREE.MathUtils.degToRad(-targetData.ra);
-          armR.rotation.z += (targetR - armR.rotation.z) * lerpSpeed;
-        }
+        if(armL) armL.rotation.z += (THREE.MathUtils.degToRad(targetData.la) - armL.rotation.z) * lerpSpeed;
+        if(armR) armR.rotation.z += (THREE.MathUtils.degToRad(-targetData.ra) - armR.rotation.z) * lerpSpeed;
 
-        // 4. 頭と首の回転 (r)
+        // 4. 頭と首 (Quaternion slerp)
         if (targetData.r) {
           const head = currentVrm.humanoid.getNormalizedBoneNode("head");
           const neck = currentVrm.humanoid.getNormalizedBoneNode("neck");
           const targetQuat = new THREE.Quaternion().fromArray(targetData.r);
           const halfQuat = new THREE.Quaternion().set(0,0,0,1).slerp(targetQuat, 0.5);
-          
           if(head && neck) {
             neck.quaternion.slerp(halfQuat, lerpSpeed);
             head.quaternion.slerp(halfQuat, lerpSpeed);
           }
         }
 
-        // 5. 表情 (s)
+        // 5. 表情
         if (targetData.s) {
           const exp = currentVrm.expressionManager;
-          const adj = (current, target) => current + (target - current) * lerpSpeed;
-          
-          const br = Math.min(1.0, (targetData.s.eyeBlinkRight || 0) > 0.1 ? targetData.s.eyeBlinkRight * (targetData.b || 1) : 0);
-          const bl = Math.min(1.0, (targetData.s.eyeBlinkLeft || 0) > 0.1 ? targetData.s.eyeBlinkLeft * (targetData.b || 1) : 0);
+          const blinkR = Math.min(1.0, (targetData.s.eyeBlinkRight || 0) > 0.1 ? targetData.s.eyeBlinkRight * (targetData.b || 1) : 0);
+          const blinkL = Math.min(1.0, (targetData.s.eyeBlinkLeft || 0) > 0.1 ? targetData.s.eyeBlinkLeft * (targetData.b || 1) : 0);
+          const jaw = targetData.s.jawOpen || 0;
 
-          exp.setValue("blinkRight", adj(exp.getValue("blinkRight") || 0, br));
-          exp.setValue("blinkLeft", adj(exp.getValue("blinkLeft") || 0, bl));
-          exp.setValue("aa", adj(exp.getValue("aa") || 0, targetData.s.jawOpen || 0));
+          exp.setValue("blinkRight", exp.getValue("blinkRight") + (blinkR - exp.getValue("blinkRight")) * lerpSpeed);
+          exp.setValue("blinkLeft", exp.getValue("blinkLeft") + (blinkL - exp.getValue("blinkLeft")) * lerpSpeed);
+          exp.setValue("aa", exp.getValue("aa") + (jaw - exp.getValue("aa")) * lerpSpeed);
         }
 
         currentVrm.update(1.0/60.0);
       }
-      
       renderer.render(scene, camera);
     }
-        
     animate();
 
     window.addEventListener('resize', () => {
@@ -219,17 +206,3 @@
   </script>
 </body>
 </html>
-
-
-
-
-
-
-
-
-
-
-
-
-
-
