@@ -162,7 +162,18 @@
     renderer.setSize(window.innerWidth, window.innerHeight);
     renderer.setClearColor(0x000000, 0);
     document.body.appendChild(renderer.domElement);
-    scene.add(new THREE.DirectionalLight(0xffffff, Math.PI), new THREE.AmbientLight(0xffffff, 0.5));
+        const mainLight = new THREE.DirectionalLight(0xffffff, 2.0); 
+    mainLight.position.set(1.0, 2.0, 2.0); // 斜め上から照らす
+    scene.add(mainLight);
+
+    // 2. 環境光（全体をふんわり明るく）：少しだけ弱めて影を残す
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.4);
+    scene.add(ambientLight);
+
+    // 3. 【美肌ライト】カメラにくっついてくる正面ライト（補助）
+    const camLight = new THREE.PointLight(0xffffff, 0.5);
+    camera.add(camLight); 
+    scene.add(camera);
 
     function animate() {
       requestAnimationFrame(animate);
