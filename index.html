@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="utf-8">
+    <title>VRM Streamer Portal</title>
+    <style>
+        body { margin: 0; background: #121212; color: #e0e0e0; font-family: 'Segoe UI', Meiryo, sans-serif; display: flex; justify-content: center; align-items: center; min-height: 100vh; }
+        .container { text-align: center; max-width: 800px; padding: 40px 20px; }
+        h1 { font-size: 2.5rem; margin-bottom: 10px; color: #0078d4; letter-spacing: 1px; }
+        .subtitle { color: #888; margin-bottom: 40px; font-size: 1rem; }
+        
+        /* カード部分 */
+        .card-container { display: flex; gap: 25px; justify-content: center; flex-wrap: wrap; margin-bottom: 50px; }
+        .card { background: #1e1e1e; border: 1px solid #333; border-radius: 16px; padding: 30px; width: 260px; transition: all 0.3s ease; text-decoration: none; color: white; position: relative; overflow: hidden; }
+        .card:hover { transform: translateY(-8px); border-color: #0078d4; background: #252525; box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
+        .card h2 { font-size: 1.5rem; margin: 15px 0 10px; }
+        .card p { font-size: 0.9rem; color: #bbb; line-height: 1.6; margin: 0; }
+        .icon { font-size: 3.5rem; display: block; }
+        
+        /* 説明ガイド部分 */
+        .guide-section { background: rgba(255,255,255,0.03); border-radius: 12px; padding: 30px; text-align: left; border: 1px dashed #444; }
+        .guide-section h3 { margin-top: 0; color: #0078d4; font-size: 1.2rem; border-bottom: 1px solid #333; padding-bottom: 10px; }
+        .steps { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 20px; margin-top: 20px; }
+        .step { position: relative; padding-left: 35px; }
+        .step-num { position: absolute; left: 0; top: 0; width: 24px; height: 24px; background: #0078d4; color: white; border-radius: 50%; text-align: center; line-height: 24px; font-weight: bold; font-size: 14px; }
+        .step-title { font-weight: bold; font-size: 0.95rem; display: block; margin-bottom: 5px; color: #fff; }
+        .step-text { font-size: 0.85rem; color: #999; line-height: 1.5; }
+
+        @media (max-width: 600px) { .steps { grid-template-columns: 1fr; } .card { width: 100%; } }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>SRTM System</h1>
+        <p class="subtitle">ブラウザだけで完結する、軽量VRMフェイストラッキングシステム</p>
+        
+        <div class="card-container">
+            <!-- Sender -->
+            <a href="sender.html" class="card">
+                <span class="icon">🎥</span>
+                <h2>Sender</h2>
+                <p>アバターを動かす「送信機」<br>カメラとマイクでVRMを操作します。</p>
+            </a>
+
+            <!-- Receiver -->
+            <a href="receiver.html" class="card">
+                <span class="icon">🖥️</span>
+                <h2>Receiver</h2>
+                <p>映像を表示する「受信機」<br>OBS等で透過読み込みする際に使用します。</p>
+            </a>
+        </div>
+
+        <div class="guide-section">
+            <h3>🚀 使い方ガイド</h3>
+            <div class="steps">
+                <div class="step">
+                    <div class="step-num">1</div>
+                    <span class="step-title">モデルを準備</span>
+                    <p class="step-text">SenderとReceiverの両方で、<b>同じVRMファイル</b>を選択して読み込みます。</p>
+                </div>
+                <div class="step">
+                    <div class="step-num">2</div>
+                    <span class="step-title">配信を開始</span>
+                    <p class="step-text">Sender側で「配信開始」を押し、発行された<b>配信ID</b>をコピーします。</p>
+                </div>
+                <div class="step">
+                    <div class="step-num">3</div>
+                    <span class="step-title">接続を完了</span>
+                    <p class="step-text">Receiver側のID入力欄に貼り付けて<b>Connect</b>を押すと同期が始まります。</p>
+                </div>
+            </div>
+        </div>
+
+        <p style="margin-top: 30px; font-size: 0.8rem; color: #555;">
+            ※ 本システムはWebRTC(PeerJS)を使用しています。データはサーバーを通さず直接送信されます。
+        </p>
+    </div>
+</body>
+</html>
