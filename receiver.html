@@ -64,6 +64,7 @@
     // 💡 変数宣言 (scene, camera, rendererを忘れずに!)
     let currentVrm, scene, camera, renderer, peer, conn, currentVrmUrl;
     let reconnectTimer = null;
+    let targetData = { h: 0, la: 0, ra: 0, r: [0, 0, 0, 1], s: null, b: 1.0, s_scale: 1.0 };
 
     // ID復元
     const saved = localStorage.getItem("vrm_receive_id");
@@ -134,26 +135,7 @@
     document.getElementById("btn_connect").onclick = connectToSender;
 
     function updateVrm(data) {
-      currentVrm.scene.position.y = data.h;
-      const armL = currentVrm.humanoid.getNormalizedBoneNode("leftUpperArm");
-      const armR = currentVrm.humanoid.getNormalizedBoneNode("rightUpperArm");
-      if(armL) armL.rotation.z = THREE.MathUtils.degToRad(data.la);
-      if(armR) armR.rotation.z = THREE.MathUtils.degToRad(-data.ra);
-
-      if (data.r) {
-        const head = currentVrm.humanoid.getNormalizedBoneNode("head");
-        const neck = currentVrm.humanoid.getNormalizedBoneNode("neck");
-        const rot = new THREE.Quaternion().fromArray(data.r);
-        const halfRot = new THREE.Quaternion().set(0,0,0,1).slerp(rot, 0.5);
-        if(head && neck) { neck.quaternion.copy(halfRot); head.quaternion.copy(halfRot); }
-      }
-      if (data.s) {
-        const exp = currentVrm.expressionManager;
-        const adj = (s) => Math.min(1.0, s > 0.1 ? s * data.b : 0);
-        exp.setValue("blinkRight", adj(data.s.eyeBlinkRight || 0));
-        exp.setValue("blinkLeft", adj(data.s.eyeBlinkLeft || 0));
-        exp.setValue("aa", data.s.jawOpen || 0);
-      }
+      targetData = data;      
     }
 
     // Three.js 初期化
@@ -168,9 +150,65 @@
 
     function animate() {
       requestAnimationFrame(animate);
-      if (currentVrm) currentVrm.update(1.0/60.0);
+      
+      if (currentVrm && targetData) {
+        const lerpSpeed = 0.15; // 💡 この数値でヌルヌル具合を調整 (0.1〜0.2がおすすめ)
+
+        // 1. 高さ (y)
+        currentVrm.scene.position.y += (targetData.h - currentVrm.scene.position.y) * lerpSpeed;
+
+        // 2. スケール (s_scale)
+        if (targetData.s_scale !== undefined) {
+          const s = targetData.s_scale;
+          const currentS = Math.abs(currentVrm.scene.scale.x);
+          const nextS = currentS + (s - currentS) * lerpSpeed;
+          currentVrm.scene.scale.set(-nextS, nextS, nextS);
+        }
+
+        // 3. 腕の回転 (la, ra)
+        const armL = currentVrm.humanoid.getNormalizedBoneNode("leftUpperArm");
+        const armR = currentVrm.humanoid.getNormalizedBoneNode("rightUpperArm");
+        if(armL) {
+          const targetL = THREE.MathUtils.degToRad(targetData.la);
+          armL.rotation.z += (targetL - armL.rotation.z) * lerpSpeed;
+        }
+        if(armR) {
+          const targetR = THREE.MathUtils.degToRad(-targetData.ra);
+          armR.rotation.z += (targetR - armR.rotation.z) * lerpSpeed;
+        }
+
+        // 4. 頭と首の回転 (r)
+        if (targetData.r) {
+          const head = currentVrm.humanoid.getNormalizedBoneNode("head");
+          const neck = currentVrm.humanoid.getNormalizedBoneNode("neck");
+          const targetQuat = new THREE.Quaternion().fromArray(targetData.r);
+          const halfQuat = new THREE.Quaternion().set(0,0,0,1).slerp(targetQuat, 0.5);
+          
+          if(head && neck) {
+            neck.quaternion.slerp(halfQuat, lerpSpeed);
+            head.quaternion.slerp(halfQuat, lerpSpeed);
+          }
+        }
+
+        // 5. 表情 (s)
+        if (targetData.s) {
+          const exp = currentVrm.expressionManager;
+          const adj = (current, target) => current + (target - current) * lerpSpeed;
+          
+          const br = Math.min(1.0, (targetData.s.eyeBlinkRight || 0) > 0.1 ? targetData.s.eyeBlinkRight * (targetData.b || 1) : 0);
+          const bl = Math.min(1.0, (targetData.s.eyeBlinkLeft || 0) > 0.1 ? targetData.s.eyeBlinkLeft * (targetData.b || 1) : 0);
+
+          exp.setValue("blinkRight", adj(exp.getValue("blinkRight") || 0, br));
+          exp.setValue("blinkLeft", adj(exp.getValue("blinkLeft") || 0, bl));
+          exp.setValue("aa", adj(exp.getValue("aa") || 0, targetData.s.jawOpen || 0));
+        }
+
+        currentVrm.update(1.0/60.0);
+      }
+      
       renderer.render(scene, camera);
     }
+        
     animate();
 
     window.addEventListener('resize', () => {
@@ -181,6 +219,7 @@
   </script>
 </body>
 </html>
+
 
 
 
