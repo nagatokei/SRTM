@@ -81,15 +81,19 @@
     // 💡 URLパラメータ (?id=xxx) を最優先で取得
     const urlParams = new URLSearchParams(window.location.search);
     const urlId = urlParams.get('id');
+    const urlVrm = urlParams.get('vrm');
 
     if (urlId) {
       targetInput.value = urlId;
     } else {
       // URLにない場合のみ、前回のIDを復元（複数人運用の邪魔にならないよう）
       const saved = localStorage.getItem("vrm_receive_id");
-      if (saved) targetInput.value = saved;
+      if (saved) targetInput.value = saved;    
     }
 
+    if (urlVrm) {
+      loadVRM(urlVrm);
+    }
     // 💡 クリックした瞬間に全選択（これで上書きペーストが確実になります）
     targetInput.onfocus = () => {
       targetInput.select();
@@ -272,6 +276,7 @@
   </script>
 </body>
 </html>
+
 
 
 
