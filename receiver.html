@@ -57,15 +57,25 @@
     
     let currentVrm, scene, camera, renderer, peer, conn, currentVrmUrl;
     let reconnectTimer = null;
-    
-    // 💡 ヌルヌル動かすための目標地点（初期値）
     let targetData = { h: 0, la: 0, ra: 0, r: [0, 0, 0, 1], s: null, b: 1.0, s_scale: 1.0 };
 
-    // ID復元
-    const saved = localStorage.getItem("vrm_receive_id");
-    if (saved) targetInput.value = saved;
+    // --- ✨ 自動化のための追加処理 ---
+    const urlParams = new URLSearchParams(window.location.search);
+    const urlId = urlParams.get('id');
+    const urlVrm = urlParams.get('vrm');
 
-    // VRM読み込み
+    // IDの設定（URL優先 ＞ 保存された値）
+    if (urlId) {
+      targetInput.value = urlId;
+    } else {
+      const saved = localStorage.getItem("vrm_receive_id");
+      if (saved) targetInput.value = saved;
+    }
+
+    // 入力欄をクリックしたときに全選択（一手間を楽に）
+    targetInput.onfocus = () => targetInput.select();
+
+    // VRM読み込み（手動）
     document.getElementById("vrm_file").onchange = (e) => {
       const file = e.target.files[0];
       if (!file) return;
@@ -75,19 +85,25 @@
     };
 
     function loadVRM(url) {
-      statusEl.innerText = "Loading...";
+      statusEl.innerText = "Loading VRM...";
       new GLTFLoader().register(p => new VRMLoaderPlugin(p)).load(url, gltf => {
         if (currentVrm) scene.remove(currentVrm.scene);
         currentVrm = gltf.userData.vrm;
         scene.add(gltf.scene);
         currentVrm.scene.scale.set(-1, 1, 1);
         statusEl.innerText = "VRM準備OK！";
+
+        // 💡 一手間楽にするポイント：VRMロード完了時にIDがあれば自動接続
+        if (targetInput.value.trim()) connectToSender();
+      }, undefined, err => {
+        statusEl.innerText = "ロード失敗。URLを確認してください";
+        console.error(err);
       });
     }
 
     function connectToSender() {
       const targetId = targetInput.value.trim();
-      if (!currentVrm || !targetId) { alert("VRMとIDが必要です"); return; }
+      if (!currentVrm || !targetId) return; // VRMがない時は何もしない（手動操作を待つ）
       
       localStorage.setItem("vrm_receive_id", targetId);
       if (peer) peer.destroy();
@@ -104,17 +120,16 @@
           if (reconnectTimer) { clearInterval(reconnectTimer); reconnectTimer = null; }
         });
         
-        conn.on('data', data => {
-          if (data) targetData = data; // データを保存するだけ（animateで補間）
-        });
-
+        conn.on('data', data => { if (data) targetData = data; });
         conn.on('close', startReconnect);
       });
 
-      peer.on('error', (err) => {
-        console.error(err);
-        startReconnect();
-      });
+      peer.on('error', () => startReconnect());
+    }
+
+    // 💡 URLにVRM指定があれば自動実行開始
+    if (urlVrm) {
+      loadVRM(urlVrm);
     }
 
     function startReconnect() {
@@ -125,7 +140,6 @@
     }
 
     document.getElementById("btn_connect").onclick = connectToSender;
-
     // --- Three.js 初期化 ---
     scene = new THREE.Scene();
     camera = new THREE.PerspectiveCamera(30, window.innerWidth / window.innerHeight, 0.1, 20.0);
@@ -206,3 +220,4 @@
   </script>
 </body>
 </html>
+
