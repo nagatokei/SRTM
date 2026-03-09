@@ -253,6 +253,13 @@
     }
     animate();
 
+    window.addEventListener('load', () => {
+      setTimeout(() => {
+        const id = targetInput.value.trim();
+        if (id && currentVrm) connectToSender();
+      }, 1500);
+    });
+    
     window.addEventListener('resize', () => {
       camera.aspect = window.innerWidth / window.innerHeight;
       camera.updateProjectionMatrix();
@@ -261,6 +268,7 @@
   </script>
 </body>
 </html>
+
 
 
 
