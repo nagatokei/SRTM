@@ -95,39 +95,57 @@
     let reconnectTimer = null;
     let targetData = { h: 0, la: 0, ra: 0, r: [0, 0, 0, 1], s: null, b: 1.0, s_scale: 1.0 };
 
-    // --- 🛠️ 記憶とURLのインテリジェント処理 ---
+    // --- ✨ リンク変換関数 (OneDrive対応版) ---
+    function fixDirectUrl(url) {
+      if (!url) return url;
+      let d = url;
+
+      // 1. OneDrive (1drv.ms) 対応
+      if (d.includes("1drv.ms")) {
+        try {
+          // 共有URLをBase64変換してAPI経由の直リンクを作成
+          const b64 = btoa(d).replace(/\//g, '_').replace(/\+/g, '-').replace(/=/g, '');
+          return `https://api.onedrive.com/v1.0/shares/u!${b64}/root/content`;
+        } catch(e) { return d; }
+      }
+
+      // 2. Dropbox対応
+      if (d.includes("www.dropbox.com")) {
+        d = d.replace("www.dropbox.com", "dl.dropboxusercontent.com").replace(/\?dl=[01]/, "");
+      }
+      
+      // 3. Google Drive対応
+      if (d.includes("drive.google.com")) {
+        const match = d.match(/\/d\/([^\/]+)/);
+        if (match) d = `https://docs.google.com/uc?id=${match[1]}&export=download`;
+      }
+
+      return d;
+    }
+
+    // --- 🛠️ 記憶とURLの処理 ---
     const urlParams = new URLSearchParams(window.location.search);
     const urlId = urlParams.get('id');
     const urlVrm = urlParams.get('vrm');
 
-    // 💡 ID忘却：URLがあれば即採用、なければ常に空（保存しない）
+    // IDは保持しない (URLにあれば採用)
     targetInput.value = (urlId && urlId.trim() !== "") ? urlId.trim() : "";
 
-    // 💡 VRM保持：URL優先、なければLocalStorageから復元
+    // VRM保持：URLがあれば優先、なければ保存分
     let vrmToLoad = null;
-    if (urlVrm) {
+    if (urlVrm && urlVrm.trim() !== "") {
         vrmToLoad = fixDirectUrl(urlVrm);
-        localStorage.setItem("vrm_save_url", urlVrm);
+        localStorage.setItem("vrm_save_url", urlVrm); // 次回用にURLを保存
         vrmIndicator.innerText = "URL Model";
     } else {
         const savedVrm = localStorage.getItem("vrm_save_url");
-        if (savedVrm) {
+        if (savedVrm && savedVrm.trim() !== "") {
             vrmToLoad = fixDirectUrl(savedVrm);
             vrmIndicator.innerText = "Saved Model";
         }
     }
 
-    function fixDirectUrl(url) {
-      if (!url) return url;
-      let d = url;
-      if (d.includes("www.dropbox.com")) d = d.replace("www.dropbox.com", "dl.dropboxusercontent.com").replace(/\?dl=[01]/, "");
-      if (d.includes("drive.google.com")) {
-        const match = d.match(/\/d\/([^\/]+)/);
-        if (match) d = `https://docs.google.com/uc?id=${match[1]}&export=download`;
-      }
-      return d;
-    }
-
+    // ファイル選択時の処理
     document.getElementById("vrm_file").onchange = (e) => {
       const file = e.target.files[0];
       if (!file) return;
@@ -151,9 +169,9 @@
         currentVrm.scene.scale.set(-1, 1, 1);
         statusEl.innerText = "Model Ready";
         statusEl.style.color = "#00ff00";
-        // IDが既に入っていれば自動接続
         if (targetInput.value.trim() !== "") connectToSender();
       }, undefined, err => {
+        console.error(err);
         statusEl.innerText = "Load Failed";
         statusEl.style.color = "#ff4444";
       });
@@ -162,10 +180,8 @@
     function connectToSender() {
       const targetId = targetInput.value.trim();
       if (!currentVrm || !targetId) return;
-      
       if (peer) peer.destroy();
       peer = new Peer();
-      
       connectBtn.innerText = "CONNECTING...";
       peer.on('open', () => {
         conn = peer.connect(targetId);
@@ -193,7 +209,7 @@
 
     if (vrmToLoad) loadVRM(vrmToLoad);
 
-    // --- Three.js レンダリング設定 ---
+    // --- Three.js 基本設定 (背景透明・ライティング) ---
     scene = new THREE.Scene();
     camera = new THREE.PerspectiveCamera(30, window.innerWidth / window.innerHeight, 0.1, 20.0);
     camera.position.set(0, 1.4, 1.5);
@@ -215,20 +231,15 @@
       requestAnimationFrame(animate);
       if (currentVrm && targetData) {
         const lerpSpeed = 0.15;
-        // 高さ・スケール同期
         currentVrm.scene.position.y += (targetData.h - currentVrm.scene.position.y) * lerpSpeed;
         const s = targetData.s_scale || 1.0;
         const currentS = Math.abs(currentVrm.scene.scale.x);
         const nextS = currentS + (s - currentS) * lerpSpeed;
         currentVrm.scene.scale.set(-nextS, nextS, nextS);
-        
-        // 腕の同期
         const armL = currentVrm.humanoid.getNormalizedBoneNode("leftUpperArm");
         const armR = currentVrm.humanoid.getNormalizedBoneNode("rightUpperArm");
         if(armL) armL.rotation.z += (THREE.MathUtils.degToRad(targetData.la) - armL.rotation.z) * lerpSpeed;
         if(armR) armR.rotation.z += (THREE.MathUtils.degToRad(-targetData.ra) - armR.rotation.z) * lerpSpeed;
-        
-        // 頭・首の回転
         if (targetData.r) {
           const head = currentVrm.humanoid.getNormalizedBoneNode("head");
           const neck = currentVrm.humanoid.getNormalizedBoneNode("neck");
@@ -239,8 +250,6 @@
             head.quaternion.slerp(halfQuat, lerpSpeed);
           }
         }
-        
-        // 表情（まばたき・口パク）
         if (targetData.s) {
           const exp = currentVrm.expressionManager;
           const blinkR = Math.min(1.0, (targetData.s.eyeBlinkRight || 0) > 0.1 ? targetData.s.eyeBlinkRight * (targetData.b || 1) : 0);
@@ -262,7 +271,9 @@
       renderer.setSize(window.innerWidth, window.innerHeight);
     });
   </script>
+
 </body>
 </html>
+
 
 
