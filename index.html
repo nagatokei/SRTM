@@ -40,6 +40,65 @@
 
         @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
         @media (max-width: 600px) { .input-row { grid-template-columns: 1fr; } .card { width: 100%; } }
+
+        /* ガイドセクションのスタイル */
+        .how-to-use-section {
+            margin-top: 60px;
+            padding-top: 40px;
+            border-top: 1px solid #333;
+            text-align: left;
+        }
+        .how-to-use-section h3 {
+            text-align: center;
+            color: #fff;
+            margin-bottom: 40px;
+        }
+        .vertical-guide {
+            display: flex;
+            flex-direction: column;
+            gap: 30px;
+            max-width: 600px;
+            margin: 0 auto;
+        }
+        .guide-item {
+            display: flex;
+            gap: 20px;
+            align-items: flex-start;
+            background: rgba(255,255,255,0.02);
+            padding: 20px;
+            border-radius: 12px;
+            transition: 0.3s;
+        }
+        .guide-item:hover { background: rgba(255,255,255,0.05); }
+        .guide-icon {
+            background: #0078d4;
+            color: white;
+            min-width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            font-size: 1.1rem;
+        }
+        .guide-content h4 { margin: 0 0 8px 0; color: #0078d4; }
+        .guide-content p { margin: 0; font-size: 0.9rem; color: #bbb; line-height: 1.6; }
+        .guide-content small { color: #888; }
+
+        .security-note {
+            margin-top: 40px;
+            padding: 20px;
+            background: rgba(40, 167, 69, 0.05);
+            border: 1px solid rgba(40, 167, 69, 0.2);
+            border-radius: 8px;
+            font-size: 0.85rem;
+            color: #aaa;
+            max-width: 600px;
+            margin-left: auto;
+            margin-right: auto;
+        }
+
     </style>
 </head>
 <body>
@@ -88,6 +147,46 @@
             URL生成機能はVRMファイルを自動読み込みさせるためのショートカットを作成し、送信したVRMファイルはブラウザが保持します。
         </p>
     </div>
+
+    <!-- 👇 ここから追加：スクロールで現れるガイド -->
+        <div class="how-to-use-section">
+            <h3>📖 誰でもできる！導入3ステップ</h3>
+            
+            <div class="vertical-guide">
+                <!-- Step 1 -->
+                <div class="guide-item">
+                    <div class="guide-icon">01</div>
+                    <div class="guide-content">
+                        <h4>自分の「ID」を確認する</h4>
+                        <p>まずは <b>Transmitter</b> を開き、画面に表示される英数字のIDをコピーしてください。これがあなたの「住所」になります。</p>
+                    </div>
+                </div>
+
+                <!-- Step 2 -->
+                <div class="guide-item">
+                    <div class="guide-icon">02</div>
+                    <div class="guide-content">
+                        <h4>VRMの「直リンク」を取得する</h4>
+                        <p>DropboxやGoogle Driveにアバターをアップし、「共有リンク」をコピーします。<br>
+                        <small>※ フォルダではなく、ファイル単体のリンクが必要です。</small></p>
+                    </div>
+                </div>
+
+                <!-- Step 3 -->
+                <div class="guide-item">
+                    <div class="guide-icon">03</div>
+                    <div class="guide-content">
+                        <h4>専用URLを発行してOBSに貼る</h4>
+                        <p>上のツールにIDとリンクを入れ、「生成」ボタンを押します。出てきたURLをOBSの<b>ブラウザソース</b>に貼り付ければ完了です！</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="security-note">
+                <p>🛡️ <b>プライバシーについて:</b><br>
+                このシステムは、あなたのクラウドストレージ全体を覗き見ることはありません。指定したアバターファイルのみを一時的に読み込む安全な仕組みです。</p>
+            </div>
+        </div>
 
     <script>
         function generateURL() {
