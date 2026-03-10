@@ -2,44 +2,72 @@
 <html>
 <head>
   <meta charset="utf-8">
-  <title>VRM Stable Receiver - Hybrid</title>
+  <title>VRM Stable Receiver - Stealth & Secure</title>
   <style>
-    body { margin: 0; background: transparent; color: white; font-family: sans-serif; overflow: hidden; width: 100vw; height: 100vh; }
+    body { margin: 0; background: transparent; color: white; font-family: 'Segoe UI', sans-serif; overflow: hidden; width: 100vw; height: 100vh; }
+    
+    /* 💡 ステルスUI：マウスがウィンドウ内にある時だけ表示 */
     #ui_panel { 
-      position: absolute; top: 10px; left: 10px; background: rgba(0,0,0,0.8); 
-      padding: 15px; z-index: 100; border-radius: 8px; width: 260px;
-      transition: opacity 0.3s; opacity: 1; 
+      position: absolute; top: 15px; left: 15px; background: rgba(15, 15, 15, 0.95); 
+      padding: 18px; z-index: 100; border-radius: 12px; width: 280px;
+      border: 1px solid #333; box-shadow: 0 8px 32px rgba(0,0,0,0.8);
+      transition: opacity 0.4s ease, visibility 0.4s;
+      opacity: 0; visibility: hidden; 
     }
-    /* 接続されたらパネルを半透明にする（マウスホバーで復活） */
-    #ui_panel.connected { opacity: 0.2; }
-    #ui_panel:hover { opacity: 1 !important; }
 
-    .control-group { margin-bottom: 10px; }
-    label { display: block; font-size: 11px; color: #ccc; margin-bottom: 4px; }
-    input { width: 100%; padding: 6px; background: #222; color: #fff; border: 1px solid #666; border-radius: 4px; box-sizing: border-box; }
-    button { width: 100%; padding: 10px; cursor: pointer; background: #28a745; color: white; border: none; border-radius: 4px; font-weight: bold; margin-top: 10px; }
-    #status { font-size: 12px; color: #ffcc00; margin-top: 8px; text-align: center; }
-    hr { border: 0; border-top: 1px solid #444; margin: 10px 0; }
+    /* マウスホバーでふわっと出現 */
+    body:hover #ui_panel { opacity: 1; visibility: visible; }
+
+    .panel-title { font-size: 14px; font-weight: bold; color: #0078d4; margin-bottom: 15px; display: flex; align-items: center; justify-content: space-between; }
+    .control-group { margin-bottom: 15px; }
+    label { display: block; font-size: 11px; color: #888; margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.5px; }
+    
+    .input-wrapper { position: relative; }
+    
+    /* 💡 伏せ字設定（password）と読みやすさの両立 */
+    input[type="password"] { 
+      width: 100%; padding: 8px 10px; background: #252525; color: #fff; border: 1px solid #444; border-radius: 6px; box-sizing: border-box; 
+      font-family: caption; letter-spacing: 0.2em; outline: none;
+    }
+    
+    .clear-btn { position: absolute; right: 8px; top: 50%; transform: translateY(-50%); cursor: pointer; color: #666; font-size: 14px; z-index: 5; }
+    .clear-btn:hover { color: #fff; }
+
+    .btn-main { 
+      width: 100%; padding: 12px; cursor: pointer; background: #0078d4; color: white; border: none; border-radius: 6px; font-weight: bold; transition: 0.2s; margin-top: 5px;
+    }
+    .btn-main.online { background: #28a745; }
+    #status { font-size: 12px; color: #ffcc00; margin-top: 12px; text-align: center; font-weight: 500; min-height: 1.2em; }
+    hr { border: 0; border-top: 1px solid #333; margin: 15px 0; }
   </style>
   <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
 </head>
 <body>
 
   <div id="ui_panel">
-    <b style="font-size: 14px;">Receiver Settings</b>
+    <div class="panel-title">
+      <span>VRM RECEIVER</span>
+      <span id="vrm_indicator" style="font-size: 10px; background: #333; padding: 2px 6px; border-radius: 4px; color: #888;">No Model</span>
+    </div>
     
-    <div class="control-group" style="margin-top:10px;">
-      <label>1. VRMファイルを選択 (手動用):</label>
+    <div class="control-group">
+      <label>Local VRM File</label>
       <input type="file" id="vrm_file" accept=".vrm">
     </div>
 
+    <hr>
+
     <div class="control-group">
-      <label>2. 送信者のID:</label>
-      <input type="text" id="target_id" placeholder="IDを入力">
-      <button id="btn_connect">Connect</button>
+      <label>Transmitter ID (Secure)</label>
+      <div class="input-wrapper">
+        <!-- 💡 伏せ字（password）タイプを採用 -->
+        <input type="password" id="target_id" placeholder="IDを入力してください">
+        <span class="clear-btn" onclick="document.getElementById('target_id').value=''">✕</span>
+      </div>
+      <button id="btn_connect" class="btn-main">CONNECT</button>
     </div>
 
-    <div id="status">VRMを選択してConnectを押してください</div>
+    <div id="status">Waiting for VRM...</div>
   </div>
 
   <script type="importmap">
@@ -58,34 +86,41 @@
     import { VRMLoaderPlugin } from '@pixiv/three-vrm';
 
     const statusEl = document.getElementById("status");
-    const uiPanel = document.getElementById("ui_panel");
     const targetInput = document.getElementById("target_id");
+    const connectBtn = document.getElementById("btn_connect");
+    const vrmIndicator = document.getElementById("vrm_indicator");
+    const uiPanel = document.getElementById("ui_panel");
     
     let currentVrm, scene, camera, renderer, peer, conn, currentVrmUrl;
     let reconnectTimer = null;
     let targetData = { h: 0, la: 0, ra: 0, r: [0, 0, 0, 1], s: null, b: 1.0, s_scale: 1.0 };
 
-    // --- ✨ 自動化・URL変換処理 ---
+    // --- 🛠️ 記憶とURLのインテリジェント処理 ---
     const urlParams = new URLSearchParams(window.location.search);
     const urlId = urlParams.get('id');
     const urlVrm = urlParams.get('vrm');
 
-    // IDの読み込み (URL優先 > 保存値)
-    if (urlId) {
-      targetInput.value = urlId;
-      localStorage.setItem("vrm_receive_id", urlId); 
+    // 💡 ID忘却：URLがあれば即採用、なければ常に空（保存しない）
+    targetInput.value = (urlId && urlId.trim() !== "") ? urlId.trim() : "";
+
+    // 💡 VRM保持：URL優先、なければLocalStorageから復元
+    let vrmToLoad = null;
+    if (urlVrm) {
+        vrmToLoad = fixDirectUrl(urlVrm);
+        localStorage.setItem("vrm_save_url", urlVrm);
+        vrmIndicator.innerText = "URL Model";
     } else {
-      const saved = localStorage.getItem("vrm_receive_id");
-      if (saved) targetInput.value = saved;
+        const savedVrm = localStorage.getItem("vrm_save_url");
+        if (savedVrm) {
+            vrmToLoad = fixDirectUrl(savedVrm);
+            vrmIndicator.innerText = "Saved Model";
+        }
     }
 
-    // 共有リンクを直リンクに変換
     function fixDirectUrl(url) {
       if (!url) return url;
       let d = url;
-      if (d.includes("www.dropbox.com")) {
-        d = d.replace("www.dropbox.com", "dl.dropboxusercontent.com").replace(/\?dl=[01]/, "");
-      }
+      if (d.includes("www.dropbox.com")) d = d.replace("www.dropbox.com", "dl.dropboxusercontent.com").replace(/\?dl=[01]/, "");
       if (d.includes("drive.google.com")) {
         const match = d.match(/\/d\/([^\/]+)/);
         if (match) d = `https://docs.google.com/uc?id=${match[1]}&export=download`;
@@ -93,22 +128,20 @@
       return d;
     }
 
-    // 手動ファイル選択のイベント
     document.getElementById("vrm_file").onchange = (e) => {
       const file = e.target.files[0];
       if (!file) return;
       if (currentVrmUrl) URL.revokeObjectURL(currentVrmUrl);
       currentVrmUrl = URL.createObjectURL(file);
+      vrmIndicator.innerText = "Local File";
       loadVRM(currentVrmUrl);
     };
 
-    // 手動接続ボタンのイベント
-    document.getElementById("btn_connect").onclick = () => {
+    connectBtn.onclick = () => {
         if (reconnectTimer) clearInterval(reconnectTimer);
         connectToSender();
     };
 
-    // VRM読み込み
     function loadVRM(url) {
       statusEl.innerText = "Loading VRM...";
       new GLTFLoader().register(p => new VRMLoaderPlugin(p)).load(url, gltf => {
@@ -116,15 +149,12 @@
         currentVrm = gltf.userData.vrm;
         scene.add(gltf.scene);
         currentVrm.scene.scale.set(-1, 1, 1);
-        statusEl.innerText = "VRM準備OK！";
+        statusEl.innerText = "Model Ready";
         statusEl.style.color = "#00ff00";
-
-        // 💡 自動化の肝：VRMがロードされた時にIDがあれば自動接続
-        if (targetInput.value.trim()) {
-            connectToSender();
-        }
+        // IDが既に入っていれば自動接続
+        if (targetInput.value.trim() !== "") connectToSender();
       }, undefined, err => {
-        statusEl.innerText = "ロード失敗。URLを確認してください";
+        statusEl.innerText = "Load Failed";
         statusEl.style.color = "#ff4444";
       });
     }
@@ -133,42 +163,37 @@
       const targetId = targetInput.value.trim();
       if (!currentVrm || !targetId) return;
       
-      localStorage.setItem("vrm_receive_id", targetId);
       if (peer) peer.destroy();
       peer = new Peer();
       
+      connectBtn.innerText = "CONNECTING...";
       peer.on('open', () => {
-        statusEl.innerText = "接続中...";
         conn = peer.connect(targetId);
-        
         conn.on('open', () => {
-          statusEl.innerText = "Connected!";
+          statusEl.innerText = "Online";
           statusEl.style.color = "#00ff00";
           uiPanel.classList.add("connected");
+          connectBtn.innerText = "CONNECTED";
+          connectBtn.className = "btn-main online";
           if (reconnectTimer) { clearInterval(reconnectTimer); reconnectTimer = null; }
         });
-        
         conn.on('data', data => { if (data) targetData = data; });
         conn.on('close', startReconnect);
       });
-
       peer.on('error', () => startReconnect());
     }
 
     function startReconnect() {
       if (reconnectTimer) return;
-      statusEl.innerText = "再接続待ち...";
-      statusEl.style.color = "#ffcc00";
+      statusEl.innerText = "Retrying...";
       uiPanel.classList.remove("connected");
+      connectBtn.innerText = "RECONNECTING...";
       reconnectTimer = setInterval(connectToSender, 5000);
     }
 
-    // --- ✨ 起動時処理：URLパラメータがあれば自動ロード ---
-    if (urlVrm) {
-        loadVRM(fixDirectUrl(urlVrm));
-    }
+    if (vrmToLoad) loadVRM(vrmToLoad);
 
-    // 画面初期化などはこれまでのコードと同じ...
+    // --- Three.js レンダリング設定 ---
     scene = new THREE.Scene();
     camera = new THREE.PerspectiveCamera(30, window.innerWidth / window.innerHeight, 0.1, 20.0);
     camera.position.set(0, 1.4, 1.5);
@@ -190,15 +215,20 @@
       requestAnimationFrame(animate);
       if (currentVrm && targetData) {
         const lerpSpeed = 0.15;
+        // 高さ・スケール同期
         currentVrm.scene.position.y += (targetData.h - currentVrm.scene.position.y) * lerpSpeed;
         const s = targetData.s_scale || 1.0;
         const currentS = Math.abs(currentVrm.scene.scale.x);
         const nextS = currentS + (s - currentS) * lerpSpeed;
         currentVrm.scene.scale.set(-nextS, nextS, nextS);
+        
+        // 腕の同期
         const armL = currentVrm.humanoid.getNormalizedBoneNode("leftUpperArm");
         const armR = currentVrm.humanoid.getNormalizedBoneNode("rightUpperArm");
         if(armL) armL.rotation.z += (THREE.MathUtils.degToRad(targetData.la) - armL.rotation.z) * lerpSpeed;
         if(armR) armR.rotation.z += (THREE.MathUtils.degToRad(-targetData.ra) - armR.rotation.z) * lerpSpeed;
+        
+        // 頭・首の回転
         if (targetData.r) {
           const head = currentVrm.humanoid.getNormalizedBoneNode("head");
           const neck = currentVrm.humanoid.getNormalizedBoneNode("neck");
@@ -209,6 +239,8 @@
             head.quaternion.slerp(halfQuat, lerpSpeed);
           }
         }
+        
+        // 表情（まばたき・口パク）
         if (targetData.s) {
           const exp = currentVrm.expressionManager;
           const blinkR = Math.min(1.0, (targetData.s.eyeBlinkRight || 0) > 0.1 ? targetData.s.eyeBlinkRight * (targetData.b || 1) : 0);
@@ -232,5 +264,6 @@
   </script>
 </body>
 </html>
+
 
 
