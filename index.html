@@ -83,6 +83,36 @@
             </div>
         </div>
 
+        <div class="guide-section" style="margin-top: 30px; padding: 20px; background: rgba(255,255,255,0.05); border-radius: 10px; font-size: 0.9em; line-height: 1.6; color: #ccc;">
+          <h3 style="color: #0078d4; margin-top: 0;">🌐 VRM URLの取得ガイド</h3>
+  
+          <p>クラウドサービスにVRMをアップロードし、以下の方法でURLを取得してください。</p>
+
+          <div style="margin-bottom: 15px;">
+            <strong style="color: #fff;">📁 OneDrive (推奨の裏技)</strong><br>
+            1. ファイルを右クリック ＞ <strong>「埋め込み」</strong> ＞ <strong>「生成」</strong> をクリック。<br>
+            2. 表示された<strong>「ダウンロード」ボタンを普通に左クリック</strong>して開始する。<br>
+            3. ブラウザの<strong>「ダウンロード履歴(Ctrl+J)」</strong>を開き、そのファイルを右クリック。<br>
+            4. <strong>「リンクのアドレスをコピー」</strong>を選択して、ここに貼り付け。
+          </div>
+
+          <div style="margin-bottom: 15px;">
+            <strong style="color: #fff;">📦 Dropbox</strong><br>
+            1. ファイルを右クリック ＞ <strong>「リンクをコピー」</strong>。<br>
+            2. 末尾が <code>?dl=0</code> の場合は <code>?dl=1</code> に自動変換されます。
+          </div>
+
+          <div style="margin-bottom: 15px;">
+            <strong style="color: #fff;">📂 Google Drive</strong><br>
+            1. ファイルを右クリック ＞ <strong>「共有」</strong> ＞ 権限を<strong>「全員」</strong>にする。<br>
+            2. <strong>「リンクをコピー」</strong>して貼り付け。（自動で直リンクへ変換されます）
+          </div>
+
+          <p style="font-size: 0.85em; color: #888; border-top: 1px solid #333; pt: 10px;">
+            ※ OneDriveのリンクは数日で期限が切れる場合があります。その際は再度取得してください。
+          </p>
+        </div>
+
         <div class="how-to-use">
             <h3>📖 つかいかたガイド</h3>
             <div class="guide-step">
@@ -93,7 +123,7 @@
                 </div>
             </div>
             <div class="guide-step">
-                <div class="step-num">1</div>
+                <div class="step-num">!</div>
                 <div class="guide-text">
                     <h4>IDをコピーする</h4>
                     <p>上のTransmitterボタンを押し、小窓で開いた画面のIDをコピーします。</p>
@@ -108,6 +138,14 @@
     </div>
 
     <script>
+        // 💡 ページを開いた時、保存されているVRMのURLがあれば自動入力する
+        window.onload = () => {
+            const savedVrm = localStorage.getItem("vrm_save_url");
+            if (savedVrm) {
+                document.getElementById('gen_vrm').value = savedVrm;
+            }
+        };
+
         // 送信機をポップアップで開く
         function openSender() {
             const w = 640;
@@ -117,26 +155,39 @@
             window.open('sender.html', 'vrm_sender', `width=${w},height=${h},left=${left},top=${top},menubar=no,toolbar=no,status=no`);
         }
 
-        // 受信機も念のためポップアップで開けるように
+        // 受信機を開く
         function openReceiver() {
             window.open('receiver.html', 'vrm_receiver', 'width=1000,height=700,menubar=no,toolbar=no,status=no');
         }
 
+        // URL生成
         function generateURL() {
             const id = document.getElementById('gen_id').value.trim();
             const vrm = document.getElementById('gen_vrm').value.trim();
-            if(!id || !vrm) { alert("両方の項目を入力してください！"); return; }
+            
+            if(!id || !vrm) { 
+                alert("両方の項目を入力してください！"); 
+                return; 
+            }
+
+            // 💡 生成した瞬間に、VRMのURLをブラウザに覚えさせる
+            localStorage.setItem("vrm_save_url", vrm);
+
             const baseUrl = window.location.href.substring(0, window.location.href.lastIndexOf('/'));
             const finalUrl = `${baseUrl}/receiver.html?id=${encodeURIComponent(id)}&vrm=${encodeURIComponent(vrm)}`;
+            
             document.getElementById('output_url').innerText = finalUrl;
             document.getElementById('result_area').style.display = 'block';
         }
 
+        // コピー機能
         function copyURL() {
-            navigator.clipboard.writeText(document.getElementById('output_url').innerText).then(() => {
+            const text = document.getElementById('output_url').innerText;
+            navigator.clipboard.writeText(text).then(() => {
                 alert("URLをコピーしました！");
             });
         }
     </script>
+        
 </body>
 </html>
