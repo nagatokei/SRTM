@@ -230,8 +230,8 @@
     function animate() {
       requestAnimationFrame(animate);
       if (currentVrm && targetData) {
-        const lerpSpeed = 0.20;
-        const mouthSpeed = 0.40;
+        const lerpSpeed = 0.50;
+        const mouthSpeed = 0.80;
         currentVrm.scene.position.y += (targetData.h - currentVrm.scene.position.y) * lerpSpeed;
         const s = targetData.s_scale || 1.0;
         const currentS = Math.abs(currentVrm.scene.scale.x);
@@ -275,6 +275,7 @@
 
 </body>
 </html>
+
 
 
 
