@@ -230,7 +230,8 @@
     function animate() {
       requestAnimationFrame(animate);
       if (currentVrm && targetData) {
-        const lerpSpeed = 0.15;
+        const lerpSpeed = 0.20;
+        const mouthSpeed = 0.40;
         currentVrm.scene.position.y += (targetData.h - currentVrm.scene.position.y) * lerpSpeed;
         const s = targetData.s_scale || 1.0;
         const currentS = Math.abs(currentVrm.scene.scale.x);
@@ -257,7 +258,7 @@
           const jaw = targetData.s.jawOpen || 0;
           exp.setValue("blinkRight", exp.getValue("blinkRight") + (blinkR - exp.getValue("blinkRight")) * lerpSpeed);
           exp.setValue("blinkLeft", exp.getValue("blinkLeft") + (blinkL - exp.getValue("blinkLeft")) * lerpSpeed);
-          exp.setValue("aa", exp.getValue("aa") + (jaw - exp.getValue("aa")) * lerpSpeed);
+          exp.setValue("aa", exp.getValue("aa") + (jaw - exp.getValue("aa")) * mouthSpeed);
         }
         currentVrm.update(1.0/60.0);
       }
@@ -274,6 +275,7 @@
 
 </body>
 </html>
+
 
 
 
