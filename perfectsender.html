@@ -261,22 +261,37 @@
           if(armR) armR.rotation.z = THREE.MathUtils.degToRad(-r);
 
           const exp = currentVrm.expressionManager;
+          
           if (result && result.faceBlendshapes.length > 0) {
             const shapes = {};
-            result.faceBlendshapes[0].categories.forEach(c => { shapes[c.categoryName] = c.score; });
+            const categories = result.faceBlendshapes[0].categories;
 
-            // まばたき
-            exp.setValue("blinkRight", Math.min(1.0, (shapes.eyeBlinkRight || 0) * bSense));
+            // 1. Mediapipeから全52種類のスコアを取得し、VRMに反映
+            categories.forEach(c => {
+              const name = c.categoryName;
+              const score = c.score;
+              shapes[name] = score;
+
+              // VRM1.0のExpressionManagerに直接流し込む（まばたき・眉毛・口の形など全自動）
+              // 感度調整が必要な「まばたき」以外をまずセット
+              if (name !== "eyeBlinkLeft" && name !== "eyeBlinkRight") {
+                exp.setValue(name, score);
+              }
+            });
+
+            // 2. まばたきだけ感度(bSense)を適用して上書き
             exp.setValue("blinkLeft", Math.min(1.0, (shapes.eyeBlinkLeft || 0) * bSense));
+            exp.setValue("blinkRight", Math.min(1.0, (shapes.eyeBlinkRight || 0) * bSense));
 
-            // 口パク (VRM 1.0命名 aa に対応)
-            const mOpen = Math.min(1.0, currentVolume * mSense);
-            exp.setValue("aa", mOpen);
-            exp.setValue("ih", 0); exp.setValue("ou", 0); exp.setValue("ee", 0); exp.setValue("oh", 0);
-
-            vData.s = { eyeBlinkRight: shapes.eyeBlinkRight, eyeBlinkLeft: shapes.eyeBlinkLeft, jawOpen: mOpen };
+            // 3. 口パク (マイク音量とカメラのjawOpenの大きい方を採用)
+            const mOpen = Math.max(shapes.jawOpen || 0, currentVolume * mSense);
+            exp.setValue("aa", mOpen); // VRM1.0標準の「あ」
+            exp.setValue("jawOpen", mOpen); // パーフェクトシンク用の「あご」
+  
+            // 4. 送信データに全表情を詰め込む
+            vData.s = { ...shapes, jawOpen: mOpen };
           }
-
+          
           // 頭の回転
           if (result && result.facialTransformationMatrixes.length > 0) {
             const rawRot = new THREE.Quaternion().setFromRotationMatrix(new THREE.Matrix4().fromArray(result.facialTransformationMatrixes[0].data));
