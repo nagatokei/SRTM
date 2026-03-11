@@ -481,10 +481,17 @@
               VRM_STANDARD_EXPRESSIONS.forEach(name => exp.setValue(name, 0));
               categories.forEach(c => exp.setValue(c.categoryName, 0));
 
+              // eyeLook系はVRMのbone LookAtと干渉するためスキップ
+              const SKIP_SHAPES = new Set([
+                'eyeBlinkLeft', 'eyeBlinkRight',
+                'eyeLookDownLeft', 'eyeLookDownRight', 'eyeLookInLeft', 'eyeLookInRight',
+                'eyeLookOutLeft', 'eyeLookOutRight', 'eyeLookUpLeft', 'eyeLookUpRight'
+              ]);
+
               if (modelHasPS) {
-                // PS対応モデル: ARKit直接適用
+                // PS対応モデル: ARKit直接適用 (eyeLook除外)
                 categories.forEach(c => {
-                  if (c.categoryName !== "eyeBlinkLeft" && c.categoryName !== "eyeBlinkRight") {
+                  if (!SKIP_SHAPES.has(c.categoryName)) {
                     exp.setValue(c.categoryName, c.score);
                   }
                 });
