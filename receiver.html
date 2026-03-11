@@ -251,15 +251,36 @@
             head.quaternion.slerp(halfQuat, lerpSpeed);
           }
         }
-        if (targetData.s) {
+        
+        if (targetData && targetData.s) {
           const exp = currentVrm.expressionManager;
-          const blinkR = Math.min(1.0, (targetData.s.eyeBlinkRight || 0) > 0.1 ? targetData.s.eyeBlinkRight * (targetData.b || 1) : 0);
-          const blinkL = Math.min(1.0, (targetData.s.eyeBlinkLeft || 0) > 0.1 ? targetData.s.eyeBlinkLeft * (targetData.b || 1) : 0);
-          const jaw = targetData.s.jawOpen || 0;
-          exp.setValue("blinkRight", exp.getValue("blinkRight") + (blinkR - exp.getValue("blinkRight")) * lerpSpeed);
-          exp.setValue("blinkLeft", exp.getValue("blinkLeft") + (blinkL - exp.getValue("blinkLeft")) * lerpSpeed);
-          exp.setValue("aa", exp.getValue("aa") + (jaw - exp.getValue("aa")) * mouthSpeed);
-        }
+          const bSense = targetData.b || 1.5; // 送信側のスライダー値
+
+          // --- 送られてきた全ての表情キーをループ ---
+          Object.keys(targetData.s).forEach(key => {
+            const rawValue = targetData.s[key];
+            let finalValue = rawValue;
+
+            if (key === "eyeBlinkLeft" || key === "eyeBlinkRight") {
+              // まばたき: 1.0標準名に変換しつつ感度適用
+              const vrmKey = (key === "eyeBlinkLeft") ? "blinkLeft" : "blinkRight";
+              finalValue = Math.min(1.0, rawValue * bSense);
+              exp.setValue(vrmKey, exp.getValue(vrmKey) + (finalValue - exp.getValue(vrmKey)) * lerpSpeed);
+            } 
+            else if (key === "jawOpen" || key === "aa") {
+              // 口パク: jawOpenとaaの両方に流し込む
+              const currentAa = exp.getValue("aa") || 0;
+              exp.setValue("aa", currentAa + (finalValue - currentAa) * mouthSpeed);
+              exp.setValue("jawOpen", currentAa + (finalValue - currentAa) * mouthSpeed);
+            } 
+            else {
+              // その他（眉毛・歪みなど）
+              const currentVal = exp.getValue(key) || 0;
+              exp.setValue(key, currentVal + (finalValue - currentVal) * lerpSpeed);
+            }
+          });
+        }        
+                
         currentVrm.update(1.0/60.0);
       }
       renderer.render(scene, camera);
@@ -275,6 +296,7 @@
 
 </body>
 </html>
+
 
 
 
