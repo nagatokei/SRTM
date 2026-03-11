@@ -530,28 +530,26 @@
             const head = currentVrm.humanoid.getNormalizedBoneNode("head"), neck = currentVrm.humanoid.getNormalizedBoneNode("neck");
             if (head && neck) { neck.quaternion.copy(halfRot); head.quaternion.copy(halfRot); }
           }
+
+          // 目のボーン直接回転 (ARKit視線データ → ボーン回転)
+          if (result && result.faceBlendshapes.length > 0) {
+            const leftEye = currentVrm.humanoid.getNormalizedBoneNode("leftEye");
+            const rightEye = currentVrm.humanoid.getNormalizedBoneNode("rightEye");
+            if (leftEye && rightEye) {
+              const mp = 10 * Math.PI / 180;
+              const my = 7 * Math.PI / 180;
+              leftEye.rotation.set(
+                ((shapes.eyeLookDownLeft || 0) - (shapes.eyeLookUpLeft || 0)) * mp,
+                ((shapes.eyeLookOutLeft || 0) - (shapes.eyeLookInLeft || 0)) * my, 0);
+              rightEye.rotation.set(
+                ((shapes.eyeLookDownRight || 0) - (shapes.eyeLookUpRight || 0)) * mp,
+                ((shapes.eyeLookInRight || 0) - (shapes.eyeLookOutRight || 0)) * my, 0);
+            }
+          }
         }
         connections.forEach(conn => { if (conn.open) conn.send(vData); });
       }
-
-      // 目のボーン直接回転 (ARKit視線データ → ボーン回転)
-      if (currentVrm) {
-        const leftEye = currentVrm.humanoid.getNormalizedBoneNode("leftEye");
-        const rightEye = currentVrm.humanoid.getNormalizedBoneNode("rightEye");
-        if (leftEye && rightEye && result && result.faceBlendshapes.length > 0) {
-          const s = {};
-          result.faceBlendshapes[0].categories.forEach(c => { s[c.categoryName] = c.score; });
-          const mp = 10 * Math.PI / 180; // max pitch (degrees→rad)
-          const my = 7 * Math.PI / 180;  // max yaw
-          leftEye.rotation.set(
-            ((s.eyeLookDownLeft || 0) - (s.eyeLookUpLeft || 0)) * mp,
-            ((s.eyeLookOutLeft || 0) - (s.eyeLookInLeft || 0)) * my, 0);
-          rightEye.rotation.set(
-            ((s.eyeLookDownRight || 0) - (s.eyeLookUpRight || 0)) * mp,
-            ((s.eyeLookInRight || 0) - (s.eyeLookOutRight || 0)) * my, 0);
-        }
-        currentVrm.update(1.0 / 60.0);
-      }
+      if (currentVrm) currentVrm.update(1.0 / 60.0);
       renderer.render(scene, camera);
     }
 
@@ -582,6 +580,3 @@
 </body>
 
 </html>
-
-</html>
-
