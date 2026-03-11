@@ -1,38 +1,166 @@
 <!DOCTYPE html>
 <html>
+
 <head>
   <meta charset="utf-8">
-  <title>VRM Sender </title>
+  <title>VRM Sender (Dual Mode)</title>
   <style>
-    body { margin: 0; background: #000; color: white; font-family: sans-serif; overflow: hidden; }
-    #ui_panel { position: absolute; top: 10px; left: 10px; background: rgba(0,0,0,0.85); padding: 15px; z-index: 10; border-radius: 8px; border: 1px solid #555; width: 280px; max-height: 90vh; overflow-y: auto; }
-    .control-group { margin-bottom: 12px; }
-    label { display: block; font-size: 11px; margin-bottom: 3px; color: #ccc; }
-    input[type="range"] { width: 100%; cursor: pointer; }
-    input[type="text"], input[type="file"] { width: 100%; padding: 5px; background: #222; color: #fff; border: 1px solid #666; border-radius: 4px; box-sizing: border-box; font-size: 12px; }
-    button { width: 100%; padding: 8px; cursor: pointer; background: #0078d4; color: white; border: none; border-radius: 4px; font-weight: bold; margin-top: 10px; }
-    button:hover { background: #005a9e; }
-    .btn-secondary { background: #444; font-size: 11px; margin-top: 5px; }
-    #mic_bar_bg { width: 100%; height: 6px; background: #333; border-radius: 3px; margin-top: 5px; overflow: hidden; }
-    #mic_bar_fill { width: 0%; height: 100%; background: #00ff00; }
-    #video_ui { position: absolute; bottom: 10px; right: 10px; width: 160px; opacity: 0.5; }
-    video { width: 100%; transform: scaleX(-1); border-radius: 4px; }
-    #conn_status { font-size: 12px; color: #ffcc00; margin-top: 10px; font-weight: bold; text-align: center; }
-    hr { border: 0; border-top: 1px solid #444; margin: 15px 0; }
-    .val-disp { float: right; color: #fff; font-weight: bold; }
-    .mode-switch { background: #333; padding: 10px; border-radius: 4px; border: 1px solid #0078d4; margin: 10px 0; }
-    #model_type_badge { font-size: 10px; padding: 2px 8px; border-radius: 4px; margin-left: 8px; font-weight: normal; }
-    .badge-ps { background: #28a745; color: #fff; }
-    .badge-mapped { background: #ffc107; color: #000; }
+    body {
+      margin: 0;
+      background: #000;
+      color: white;
+      font-family: sans-serif;
+      overflow: hidden;
+    }
+
+    #ui_panel {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      background: rgba(0, 0, 0, 0.85);
+      padding: 15px;
+      z-index: 10;
+      border-radius: 8px;
+      border: 1px solid #555;
+      width: 280px;
+      max-height: 90vh;
+      overflow-y: auto;
+    }
+
+    .control-group {
+      margin-bottom: 12px;
+    }
+
+    label {
+      display: block;
+      font-size: 11px;
+      margin-bottom: 3px;
+      color: #ccc;
+    }
+
+    input[type="range"] {
+      width: 100%;
+      cursor: pointer;
+    }
+
+    input[type="text"],
+    input[type="file"] {
+      width: 100%;
+      padding: 5px;
+      background: #222;
+      color: #fff;
+      border: 1px solid #666;
+      border-radius: 4px;
+      box-sizing: border-box;
+      font-size: 12px;
+    }
+
+    button {
+      width: 100%;
+      padding: 8px;
+      cursor: pointer;
+      background: #0078d4;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      font-weight: bold;
+      margin-top: 10px;
+    }
+
+    button:hover {
+      background: #005a9e;
+    }
+
+    .btn-secondary {
+      background: #444;
+      font-size: 11px;
+      margin-top: 5px;
+    }
+
+    #mic_bar_bg {
+      width: 100%;
+      height: 6px;
+      background: #333;
+      border-radius: 3px;
+      margin-top: 5px;
+      overflow: hidden;
+    }
+
+    #mic_bar_fill {
+      width: 0%;
+      height: 100%;
+      background: #00ff00;
+    }
+
+    #video_ui {
+      position: absolute;
+      bottom: 10px;
+      right: 10px;
+      width: 160px;
+      opacity: 0.5;
+    }
+
+    video {
+      width: 100%;
+      transform: scaleX(-1);
+      border-radius: 4px;
+    }
+
+    #conn_status {
+      font-size: 12px;
+      color: #ffcc00;
+      margin-top: 10px;
+      font-weight: bold;
+      text-align: center;
+    }
+
+    hr {
+      border: 0;
+      border-top: 1px solid #444;
+      margin: 15px 0;
+    }
+
+    .val-disp {
+      float: right;
+      color: #fff;
+      font-weight: bold;
+    }
+
+    .mode-switch {
+      background: #333;
+      padding: 10px;
+      border-radius: 4px;
+      border: 1px solid #0078d4;
+      margin: 10px 0;
+    }
+
+    #model_type_badge {
+      font-size: 10px;
+      padding: 2px 8px;
+      border-radius: 4px;
+      margin-left: 8px;
+      font-weight: normal;
+    }
+
+    .badge-ps {
+      background: #28a745;
+      color: #fff;
+    }
+
+    .badge-mapped {
+      background: #ffc107;
+      color: #000;
+    }
   </style>
   <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
 </head>
+
 <body>
 
   <div id="ui_panel">
-    <b style="font-size: 14px;">VRM Sender </b>
-    <span id="model_type_badge" style="display:none;"></span>
-    
+    <b style="font-size: 14px;">VRM Sender (Dual Mode)</b>
+    <div id="model_type_badge" style="display:none; margin-top: 6px; font-size: 11px; font-weight: bold;"></div>
+
     <div class="control-group" style="margin-top:15px;">
       <label>1. VRMファイルを選択:</label>
       <input type="file" id="vrm_file" accept=".vrm">
@@ -55,16 +183,35 @@
       </div>
       <button id="btn_start">カメラ・マイク・配信 開始</button>
       <div id="conn_status">VRMを選択してください</div>
-   
-      <div id="live_indicator" style="display:none; font-size:12px; color:#ff4444; text-align:center; margin-top:8px; font-weight:bold; letter-spacing: 1px;">
+
+      <div id="live_indicator"
+        style="display:none; font-size:12px; color:#ff4444; text-align:center; margin-top:8px; font-weight:bold; letter-spacing: 1px;">
         <span class="blink_dot">●</span> CAMERA ACTIVE
       </div>
       <style>
-        .blink_dot { animation: blink 1.2s infinite; margin-right: 4px; }
-        @keyframes blink { 0% { opacity: 1; } 50% { opacity: 0.2; } 100% { opacity: 1; } }
+        .blink_dot {
+          animation: blink 1.2s infinite;
+          margin-right: 4px;
+        }
+
+        @keyframes blink {
+          0% {
+            opacity: 1;
+          }
+
+          50% {
+            opacity: 0.2;
+          }
+
+          100% {
+            opacity: 1;
+          }
+        }
       </style>
-      
-      <div id="mic_bar_bg"><div id="mic_bar_fill"></div></div>
+
+      <div id="mic_bar_bg">
+        <div id="mic_bar_fill"></div>
+      </div>
     </div>
 
     <hr>
@@ -83,7 +230,7 @@
       <label>キャラの大きさ: <span class="val-disp" id="v_scale">1.0</span></label>
       <input type="range" id="s_scale" min="0.1" max="2.0" step="0.05" value="1.0">
     </div>
-    
+
     <div class="control-group">
       <label>左腕の角度: <span class="val-disp" id="v_l">0</span>°</label>
       <input type="range" id="s_l" min="-90" max="90" step="1" value="-60">
@@ -153,10 +300,10 @@
     // ====== ARKit → VRM 標準表情マッピング ======
     // VRoid Studioモデル等、PS非対応モデル用
     const VRM_STANDARD_EXPRESSIONS = [
-      'happy','angry','sad','relaxed','surprised',
-      'blinkLeft','blinkRight',
-      'aa','ih','ou','ee','oh',
-      'lookUp','lookDown','lookLeft','lookRight'
+      'happy', 'angry', 'sad', 'relaxed', 'surprised',
+      'blinkLeft', 'blinkRight',
+      'aa', 'ih', 'ou', 'ee', 'oh',
+      'lookUp', 'lookDown', 'lookLeft', 'lookRight'
     ];
 
     function mapARKitToVRM(shapes, blinkSensitivity) {
@@ -221,7 +368,7 @@
     let savedRoomId = localStorage.getItem('last_room_id') || ("vrm-" + Math.random().toString(36).substring(2, 10));
     localStorage.setItem('last_room_id', savedRoomId);
     roomIdInput.value = savedRoomId;
-    
+
     document.getElementById("btn_copy").onclick = () => {
       navigator.clipboard.writeText(roomIdInput.value).then(() => {
         const btn = document.getElementById("btn_copy");
@@ -229,7 +376,7 @@
         setTimeout(() => { btn.innerText = "コピー"; }, 2000);
       });
     };
-   
+
     document.getElementById("btn_reset_pose").onclick = () => { shouldResetPose = true; };
 
     // ====== IndexedDB (VRM永続化) ======
@@ -280,7 +427,7 @@
       const req = db.transaction(storeName).objectStore(storeName).get("last_vrm");
       req.onsuccess = () => { if (req.result) loadVRM(req.result); };
     })();
-      
+
     // ====== カメラ・マイク・配信開始 ======
     document.getElementById("btn_start").onclick = async () => {
       if (!currentVrm) { alert("VRMを選択してください"); return; }
@@ -298,7 +445,7 @@
         peer = new Peer(roomIdInput.value);
         peer.on('open', id => { connStatus.innerText = "配信中: " + id; document.getElementById("live_indicator").style.display = "block"; });
         peer.on('connection', conn => { conn.on('open', () => connections.push(conn)); });
-      } catch(e) { alert("カメラ/マイクの起動に失敗しました"); }
+      } catch (e) { alert("カメラ/マイクの起動に失敗しました"); }
     };
 
     // ====== Three.js シーン ======
@@ -330,12 +477,12 @@
       if (video.readyState >= 2 && video.currentTime !== lastVideoTime) {
         lastVideoTime = video.currentTime;
         const result = faceLandmarker ? faceLandmarker.detectForVideo(video, performance.now()) : null;
-        
+
         // スライダー値取得
         const h = parseFloat(s_h.value), l = parseFloat(s_l.value), r = parseFloat(s_r.value);
         const bSense = parseFloat(s_blink.value), mSense = parseFloat(s_mic.value);
         const scaleVal = parseFloat(document.getElementById("s_scale").value);
-        
+
         // 表示更新
         document.getElementById("v_h").innerText = h.toFixed(2);
         document.getElementById("v_l").innerText = l;
@@ -354,11 +501,11 @@
           // 腕の角度
           const armL = currentVrm.humanoid.getNormalizedBoneNode("leftUpperArm");
           const armR = currentVrm.humanoid.getNormalizedBoneNode("rightUpperArm");
-          if(armL) armL.rotation.z = THREE.MathUtils.degToRad(l);
-          if(armR) armR.rotation.z = THREE.MathUtils.degToRad(-r);
+          if (armL) armL.rotation.z = THREE.MathUtils.degToRad(l);
+          if (armR) armR.rotation.z = THREE.MathUtils.degToRad(-r);
 
           const exp = currentVrm.expressionManager;
-          
+
           if (result && result.faceBlendshapes.length > 0) {
             const categories = result.faceBlendshapes[0].categories;
             const shapes = {};
@@ -405,7 +552,7 @@
               vData.s = { eyeBlinkLeft: bL, eyeBlinkRight: bR, jawOpen: mOpen, aa: mOpen };
             }
           }
-          
+
           // 頭の回転
           if (result && result.facialTransformationMatrixes.length > 0) {
             const rawRot = new THREE.Quaternion().setFromRotationMatrix(
@@ -414,10 +561,10 @@
             if (shouldResetPose) { offsetRotation.copy(rawRot).invert(); shouldResetPose = false; }
             let correctedRot = new THREE.Quaternion().multiplyQuaternions(offsetRotation, rawRot);
             vData.r = [correctedRot.x, correctedRot.y, correctedRot.z, correctedRot.w];
-            const halfRot = new THREE.Quaternion().set(0,0,0,1).slerp(correctedRot, 0.5);
+            const halfRot = new THREE.Quaternion().set(0, 0, 0, 1).slerp(correctedRot, 0.5);
             const head = currentVrm.humanoid.getNormalizedBoneNode("head");
             const neck = currentVrm.humanoid.getNormalizedBoneNode("neck");
-            if(head && neck) { neck.quaternion.copy(halfRot); head.quaternion.copy(halfRot); }
+            if (head && neck) { neck.quaternion.copy(halfRot); head.quaternion.copy(halfRot); }
           }
         }
 
@@ -425,7 +572,7 @@
         connections.forEach(conn => { if (conn.open) conn.send(vData); });
       }
 
-      if (currentVrm) currentVrm.update(1.0/60.0);
+      if (currentVrm) currentVrm.update(1.0 / 60.0);
       renderer.render(scene, camera);
     }
 
@@ -441,6 +588,7 @@
     setupTracking();
   </script>
 </body>
+
 </html>
 
 
