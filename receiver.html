@@ -456,7 +456,7 @@
 
                     if (modelHasPS) {
                         // --- PS対応モデル: ARKit直接適用 + lerp ---
-                        // eyeLook系はVRMのbone LookAtと干渉するためスキップ
+                        // eyeLook系はVRM標準のlookAt表情に変換
                         const SKIP_SHAPES = new Set([
                             'eyeBlinkLeft', 'eyeBlinkRight',
                             'eyeLookDownLeft', 'eyeLookDownRight', 'eyeLookInLeft', 'eyeLookInRight',
@@ -482,6 +482,19 @@
                                 const currentVal = exp.getValue(key) || 0;
                                 exp.setValue(key, currentVal + (finalValue - currentVal) * lerpSpeed);
                             }
+                        });
+
+                        // 視線: ARKit eyeLook → VRM lookAt表情に変換 (lerp付き)
+                        const s = targetData.s;
+                        const lookNames = {
+                            lookUp: ((s.eyeLookUpLeft || 0) + (s.eyeLookUpRight || 0)) / 2,
+                            lookDown: ((s.eyeLookDownLeft || 0) + (s.eyeLookDownRight || 0)) / 2,
+                            lookLeft: ((s.eyeLookInLeft || 0) + (s.eyeLookOutRight || 0)) / 2,
+                            lookRight: ((s.eyeLookOutLeft || 0) + (s.eyeLookInRight || 0)) / 2
+                        };
+                        Object.entries(lookNames).forEach(([k, v]) => {
+                            const cur = exp.getValue(k) || 0;
+                            exp.setValue(k, cur + (v - cur) * lerpSpeed);
                         });
                     } else {
                         // --- PS非対応モデル: マッピング適用 + lerp ---
