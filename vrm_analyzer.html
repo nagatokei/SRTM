@@ -1,0 +1,554 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="utf-8">
+    <title>VRM Structure Analyzer</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            background: #0a0a0f;
+            color: #e0e0e0;
+            font-family: 'Segoe UI', sans-serif;
+            min-height: 100vh;
+        }
+
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+            padding: 30px 20px;
+        }
+
+        h1 {
+            font-size: 22px;
+            color: #60a5fa;
+            margin-bottom: 5px;
+        }
+
+        .subtitle {
+            font-size: 12px;
+            color: #666;
+            margin-bottom: 25px;
+        }
+
+        .drop-zone {
+            border: 2px dashed #333;
+            border-radius: 12px;
+            padding: 50px;
+            text-align: center;
+            cursor: pointer;
+            transition: 0.3s;
+            background: #111118;
+            margin-bottom: 25px;
+        }
+
+        .drop-zone:hover,
+        .drop-zone.drag-over {
+            border-color: #60a5fa;
+            background: #151520;
+        }
+
+        .drop-zone input {
+            display: none;
+        }
+
+        .drop-zone .icon {
+            font-size: 40px;
+            margin-bottom: 10px;
+        }
+
+        .drop-zone .label {
+            font-size: 14px;
+            color: #888;
+        }
+
+        .section {
+            background: #111118;
+            border: 1px solid #222;
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+
+        .section-title {
+            font-size: 14px;
+            font-weight: bold;
+            color: #60a5fa;
+            margin-bottom: 12px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .section-title .count {
+            background: #1e3a5f;
+            color: #60a5fa;
+            padding: 2px 8px;
+            border-radius: 10px;
+            font-size: 11px;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 12px;
+        }
+
+        th {
+            text-align: left;
+            padding: 8px 10px;
+            background: #181822;
+            color: #888;
+            border-bottom: 1px solid #2a2a3a;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            font-size: 10px;
+        }
+
+        td {
+            padding: 7px 10px;
+            border-bottom: 1px solid #1a1a25;
+        }
+
+        tr:hover td {
+            background: #151520;
+        }
+
+        .tag {
+            display: inline-block;
+            padding: 2px 7px;
+            border-radius: 4px;
+            font-size: 10px;
+            font-weight: bold;
+            margin: 1px;
+        }
+
+        .tag-exists {
+            background: #1a3a1a;
+            color: #4ade80;
+        }
+
+        .tag-missing {
+            background: #3a1a1a;
+            color: #f87171;
+        }
+
+        .tag-mapped {
+            background: #3a3a1a;
+            color: #fbbf24;
+        }
+
+        .tag-info {
+            background: #1a2a3a;
+            color: #60a5fa;
+        }
+
+        .meta-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 10px;
+        }
+
+        .meta-item {
+            background: #181822;
+            padding: 10px 12px;
+            border-radius: 6px;
+        }
+
+        .meta-item .key {
+            font-size: 10px;
+            color: #666;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .meta-item .val {
+            font-size: 13px;
+            color: #fff;
+            margin-top: 3px;
+            word-break: break-all;
+        }
+
+        .expression-bind {
+            font-size: 11px;
+            color: #888;
+            margin-left: 10px;
+        }
+
+        .progress-bar {
+            width: 100%;
+            height: 20px;
+            background: #181822;
+            border-radius: 10px;
+            overflow: hidden;
+            margin: 10px 0;
+        }
+
+        .progress-fill {
+            height: 100%;
+            border-radius: 10px;
+            transition: width 0.5s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 10px;
+            font-weight: bold;
+        }
+
+        .copy-btn {
+            background: #222;
+            border: 1px solid #333;
+            color: #aaa;
+            padding: 5px 12px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 11px;
+            float: right;
+        }
+
+        .copy-btn:hover {
+            background: #333;
+            color: #fff;
+        }
+
+        #results {
+            display: none;
+        }
+
+        .arkit-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+            gap: 6px;
+        }
+
+        .arkit-item {
+            padding: 6px 10px;
+            border-radius: 6px;
+            font-size: 11px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .arkit-item.exists {
+            background: #1a3a1a;
+        }
+
+        .arkit-item.missing {
+            background: #2a1a1a;
+        }
+
+        .arkit-item .name {
+            font-family: 'Consolas', monospace;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <h1>🔍 VRM Structure Analyzer</h1>
+        <div class="subtitle">VRMファイルの内部構造を解析し、パーフェクトシンク対応状況を診断します</div>
+
+        <div class="drop-zone" id="dropZone">
+            <div class="icon">📁</div>
+            <div class="label">VRMファイルをドラッグ＆ドロップ、またはクリックして選択</div>
+            <input type="file" id="fileInput" accept=".vrm">
+        </div>
+
+        <div id="results">
+            <!-- 基本情報 -->
+            <div class="section">
+                <div class="section-title">📋 基本情報</div>
+                <div class="meta-grid" id="metaGrid"></div>
+            </div>
+
+            <!-- PS対応状況サマリー -->
+            <div class="section">
+                <div class="section-title">🎯 パーフェクトシンク対応状況</div>
+                <div id="psSummary"></div>
+                <div class="progress-bar">
+                    <div class="progress-fill" id="psProgress"></div>
+                </div>
+                <div class="arkit-grid" id="arkitGrid"></div>
+            </div>
+
+            <!-- 既存モーフターゲット -->
+            <div class="section">
+                <div class="section-title">🎭 メッシュ別モーフターゲット一覧 <span class="count" id="morphCount">0</span></div>
+                <button class="copy-btn" id="copyMorphs">📋 コピー</button>
+                <div id="morphList"></div>
+            </div>
+
+            <!-- VRM Expressions -->
+            <div class="section">
+                <div class="section-title">😀 VRM Expression 定義 <span class="count" id="expCount">0</span></div>
+                <div id="expressionList"></div>
+            </div>
+
+            <!-- 生データ -->
+            <div class="section">
+                <div class="section-title">📄 glTF JSON (Raw) <button class="copy-btn" id="copyJson">📋 コピー</button>
+                </div>
+                <div
+                    style="max-height: 300px; overflow-y: auto; background: #0d0d14; padding: 10px; border-radius: 6px; margin-top: 8px;">
+                    <pre id="rawJson"
+                        style="font-size: 11px; font-family: Consolas, monospace; white-space: pre-wrap; word-break: break-all;"></pre>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const ARKIT_BLENDSHAPES = [
+            'eyeBlinkLeft', 'eyeLookDownLeft', 'eyeLookInLeft', 'eyeLookOutLeft', 'eyeLookUpLeft', 'eyeSquintLeft', 'eyeWideLeft',
+            'eyeBlinkRight', 'eyeLookDownRight', 'eyeLookInRight', 'eyeLookOutRight', 'eyeLookUpRight', 'eyeSquintRight', 'eyeWideRight',
+            'jawForward', 'jawLeft', 'jawRight', 'jawOpen',
+            'mouthClose', 'mouthFunnel', 'mouthPucker', 'mouthLeft', 'mouthRight',
+            'mouthSmileLeft', 'mouthSmileRight', 'mouthFrownLeft', 'mouthFrownRight',
+            'mouthDimpleLeft', 'mouthDimpleRight', 'mouthStretchLeft', 'mouthStretchRight',
+            'mouthRollLower', 'mouthRollUpper', 'mouthShrugLower', 'mouthShrugUpper',
+            'mouthPressLeft', 'mouthPressRight',
+            'noseSneerLeft', 'noseSneerRight',
+            'cheekPuff', 'cheekSquintLeft', 'cheekSquintRight',
+            'browDownLeft', 'browDownRight', 'browInnerUp', 'browOuterUpLeft', 'browOuterUpRight',
+            'tongueOut'
+        ];
+
+        const dropZone = document.getElementById('dropZone');
+        const fileInput = document.getElementById('fileInput');
+
+        dropZone.addEventListener('click', () => fileInput.click());
+        dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('drag-over'); });
+        dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'));
+        dropZone.addEventListener('drop', e => { e.preventDefault(); dropZone.classList.remove('drag-over'); handleFile(e.dataTransfer.files[0]); });
+        fileInput.addEventListener('change', e => { if (e.target.files[0]) handleFile(e.target.files[0]); });
+
+        async function handleFile(file) {
+            if (!file) return;
+            dropZone.querySelector('.label').innerText = '解析中...';
+            const buf = await file.arrayBuffer();
+            const gltf = parseGLB(buf);
+            if (!gltf) { dropZone.querySelector('.label').innerText = '解析に失敗しました'; return; }
+            analyzeVRM(gltf, file.name, file.size);
+            document.getElementById('results').style.display = 'block';
+            dropZone.querySelector('.label').innerText = '✅ ' + file.name + ' を解析完了（別のファイルを解析するにはここをクリック）';
+        }
+
+        function parseGLB(arrayBuffer) {
+            try {
+                const view = new DataView(arrayBuffer);
+                const magic = view.getUint32(0, true);
+                if (magic !== 0x46546C67) { alert('glTFファイルではありません'); return null; }
+                const jsonChunkLength = view.getUint32(12, true);
+                const jsonData = new Uint8Array(arrayBuffer, 20, jsonChunkLength);
+                return JSON.parse(new TextDecoder().decode(jsonData));
+            } catch (e) {
+                console.error(e);
+                alert('VRMファイルの解析に失敗: ' + e.message);
+                return null;
+            }
+        }
+
+        function analyzeVRM(gltf, fileName, fileSize) {
+            // === 基本情報 ===
+            const meta = [];
+            meta.push({ key: 'ファイル名', val: fileName });
+            meta.push({ key: 'ファイルサイズ', val: (fileSize / 1024 / 1024).toFixed(2) + ' MB' });
+            meta.push({ key: 'glTF Version', val: (gltf.asset && gltf.asset.version) || '不明' });
+            meta.push({ key: 'Generator', val: (gltf.asset && gltf.asset.generator) || '不明' });
+
+            // VRM version
+            const vrm1 = gltf.extensions && gltf.extensions.VRMC_vrm;
+            const vrm0 = gltf.extensions && gltf.extensions.VRM;
+            if (vrm1) {
+                meta.push({ key: 'VRM Version', val: '1.0 (VRMC_vrm)' });
+                if (vrm1.meta) {
+                    meta.push({ key: 'モデル名', val: vrm1.meta.name || '未設定' });
+                    meta.push({ key: '作者', val: (vrm1.meta.authors && vrm1.meta.authors.join(', ')) || '未設定' });
+                }
+            } else if (vrm0) {
+                meta.push({ key: 'VRM Version', val: '0.x (VRM)' });
+                if (vrm0.meta) {
+                    meta.push({ key: 'モデル名', val: vrm0.meta.title || '未設定' });
+                    meta.push({ key: '作者', val: vrm0.meta.author || '未設定' });
+                }
+            } else {
+                meta.push({ key: 'VRM Version', val: '不明' });
+            }
+
+            meta.push({ key: 'メッシュ数', val: (gltf.meshes && gltf.meshes.length) || 0 });
+            meta.push({ key: 'Extensions', val: gltf.extensionsUsed ? gltf.extensionsUsed.join(', ') : 'なし' });
+
+            const metaGrid = document.getElementById('metaGrid');
+            metaGrid.innerHTML = meta.map(m => `<div class="meta-item"><div class="key">${m.key}</div><div class="val">${m.val}</div></div>`).join('');
+
+            // === モーフターゲット収集 ===
+            const allMorphNames = new Set();
+            const meshMorphs = [];
+
+            if (gltf.meshes) {
+                gltf.meshes.forEach((mesh, mi) => {
+                    const names = [];
+                    // VRM 1.0: mesh.extras.targetNames
+                    if (mesh.extras && mesh.extras.targetNames) {
+                        mesh.extras.targetNames.forEach(n => { names.push(n); allMorphNames.add(n); });
+                    }
+                    // Alternative: primitives[0].extras.targetNames
+                    else if (mesh.primitives && mesh.primitives[0] && mesh.primitives[0].extras && mesh.primitives[0].extras.targetNames) {
+                        mesh.primitives[0].extras.targetNames.forEach(n => { names.push(n); allMorphNames.add(n); });
+                    }
+                    // Count from targets array
+                    else if (mesh.primitives && mesh.primitives[0] && mesh.primitives[0].targets) {
+                        mesh.primitives[0].targets.forEach((_, ti) => {
+                            const name = `target_${ti}`;
+                            names.push(name);
+                            allMorphNames.add(name);
+                        });
+                    }
+
+                    if (names.length > 0) {
+                        meshMorphs.push({ name: mesh.name || `Mesh_${mi}`, index: mi, morphs: names });
+                    }
+                });
+            }
+
+            // === VRM Expression 抽出 ===
+            const expressions = [];
+            if (vrm1 && vrm1.expressions) {
+                const preset = vrm1.expressions.preset || {};
+                const custom = vrm1.expressions.custom || {};
+                Object.entries(preset).forEach(([name, def]) => {
+                    expressions.push({ name, type: 'preset', def });
+                });
+                Object.entries(custom).forEach(([name, def]) => {
+                    expressions.push({ name, type: 'custom', def });
+                });
+            } else if (vrm0 && vrm0.blendShapeMaster && vrm0.blendShapeMaster.blendShapeGroups) {
+                vrm0.blendShapeMaster.blendShapeGroups.forEach(g => {
+                    expressions.push({ name: g.name || g.presetName, type: g.presetName ? 'preset' : 'custom', def: g });
+                });
+            }
+
+            // === PS対応状況チェック ===
+            // VRM expressionのカスタム名 + モーフターゲット名の両方からARKit名を検索
+            const customExpNames = new Set(expressions.filter(e => e.type === 'custom').map(e => e.name));
+            const foundArkit = [];
+            const missingArkit = [];
+
+            ARKIT_BLENDSHAPES.forEach(name => {
+                if (allMorphNames.has(name) || customExpNames.has(name)) {
+                    foundArkit.push(name);
+                } else {
+                    missingArkit.push(name);
+                }
+            });
+
+            const psPercent = Math.round((foundArkit.length / ARKIT_BLENDSHAPES.length) * 100);
+            const psSummary = document.getElementById('psSummary');
+            psSummary.innerHTML = `
+        <div style="font-size: 13px; margin-bottom: 5px;">
+          ARKit 52ブレンドシェイプのうち <b style="color: #4ade80;">${foundArkit.length}</b> / ${ARKIT_BLENDSHAPES.length} が存在
+          ${psPercent === 100 ? '<span class="tag tag-exists">完全対応</span>' : psPercent === 0 ? '<span class="tag tag-missing">非対応</span>' : '<span class="tag tag-mapped">部分対応</span>'}
+        </div>`;
+
+            const psProgress = document.getElementById('psProgress');
+            psProgress.style.width = psPercent + '%';
+            psProgress.style.background = psPercent === 100 ? '#22c55e' : psPercent > 50 ? '#eab308' : '#ef4444';
+            psProgress.innerText = psPercent + '%';
+
+            const arkitGrid = document.getElementById('arkitGrid');
+            arkitGrid.innerHTML = ARKIT_BLENDSHAPES.map(name => {
+                const exists = foundArkit.includes(name);
+                return `<div class="arkit-item ${exists ? 'exists' : 'missing'}">
+          <span class="name">${name}</span>
+          <span class="tag ${exists ? 'tag-exists' : 'tag-missing'}">${exists ? '✓' : '✗'}</span>
+        </div>`;
+            }).join('');
+
+            // === モーフターゲット表示 ===
+            document.getElementById('morphCount').innerText = allMorphNames.size;
+            const morphList = document.getElementById('morphList');
+
+            if (meshMorphs.length === 0) {
+                morphList.innerHTML = '<div style="color: #888; font-size: 13px; padding: 10px;">モーフターゲットが見つかりませんでした</div>';
+            } else {
+                let morphAllText = '';
+                morphList.innerHTML = meshMorphs.map(m => {
+                    morphAllText += `\n[${m.name}]\n` + m.morphs.join('\n') + '\n';
+                    return `
+            <div style="margin-bottom: 15px;">
+              <div style="font-size: 12px; font-weight: bold; color: #fff; margin-bottom: 6px;">
+                ${m.name} <span class="tag tag-info">${m.morphs.length} targets</span>
+              </div>
+              <table>
+                <tr><th style="width:50px;">#</th><th>モーフターゲット名</th><th style="width:80px;">ARKit?</th></tr>
+                ${m.morphs.map((name, i) => {
+                        const isArkit = ARKIT_BLENDSHAPES.includes(name);
+                        return `<tr><td>${i}</td><td style="font-family: Consolas, monospace;">${name}</td><td>${isArkit ? '<span class="tag tag-exists">ARKit</span>' : ''}</td></tr>`;
+                    }).join('')}
+              </table>
+            </div>`;
+                }).join('');
+
+                document.getElementById('copyMorphs').onclick = () => {
+                    navigator.clipboard.writeText(morphAllText.trim()).then(() => {
+                        document.getElementById('copyMorphs').innerText = '✅ コピー完了';
+                        setTimeout(() => { document.getElementById('copyMorphs').innerText = '📋 コピー'; }, 2000);
+                    });
+                };
+            }
+
+            // === Expression表示 ===
+            document.getElementById('expCount').innerText = expressions.length;
+            const expressionList = document.getElementById('expressionList');
+
+            if (expressions.length === 0) {
+                expressionList.innerHTML = '<div style="color: #888; font-size: 13px; padding: 10px;">Expression定義が見つかりませんでした</div>';
+            } else {
+                expressionList.innerHTML = `
+          <table>
+            <tr><th>名前</th><th>タイプ</th><th>モーフバインド</th><th>Override</th></tr>
+            ${expressions.map(e => {
+                    let binds = '';
+                    if (e.def.morphTargetBinds && e.def.morphTargetBinds.length > 0) {
+                        binds = e.def.morphTargetBinds.map(b => {
+                            const meshName = (gltf.meshes && gltf.meshes[b.node || b.mesh]) ? (gltf.meshes[b.node || b.mesh].name || `mesh_${b.node || b.mesh}`) : `?`;
+                            return `<span class="tag tag-info">${meshName}[${b.index}] w=${b.weight != null ? b.weight.toFixed(2) : '?'}</span>`;
+                        }).join(' ');
+                    } else {
+                        binds = '<span style="color:#555;">なし</span>';
+                    }
+                    const overrides = [];
+                    if (e.def.overrideBlink) overrides.push('blink:' + e.def.overrideBlink);
+                    if (e.def.overrideLookAt) overrides.push('lookAt:' + e.def.overrideLookAt);
+                    if (e.def.overrideMouth) overrides.push('mouth:' + e.def.overrideMouth);
+                    return `<tr>
+                <td style="font-family: Consolas, monospace; font-weight: bold;">${e.name}</td>
+                <td><span class="tag ${e.type === 'preset' ? 'tag-info' : 'tag-mapped'}">${e.type}</span></td>
+                <td>${binds}</td>
+                <td style="font-size: 10px; color: #888;">${overrides.join(', ') || '-'}</td>
+              </tr>`;
+                }).join('')}
+          </table>`;
+            }
+
+            // === Raw JSON ===
+            const rawJson = document.getElementById('rawJson');
+            rawJson.textContent = JSON.stringify(gltf, null, 2);
+            document.getElementById('copyJson').onclick = () => {
+                navigator.clipboard.writeText(rawJson.textContent).then(() => {
+                    document.getElementById('copyJson').innerText = '✅ コピー完了';
+                    setTimeout(() => { document.getElementById('copyJson').innerText = '📋 コピー'; }, 2000);
+                });
+            };
+        }
+    </script>
+</body>
+
+</html>
