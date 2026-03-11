@@ -251,15 +251,30 @@
             head.quaternion.slerp(halfQuat, lerpSpeed);
           }
         }
+        
         if (targetData.s) {
           const exp = currentVrm.expressionManager;
-          const blinkR = Math.min(1.0, (targetData.s.eyeBlinkRight || 0) > 0.1 ? targetData.s.eyeBlinkRight * (targetData.b || 1) : 0);
-          const blinkL = Math.min(1.0, (targetData.s.eyeBlinkLeft || 0) > 0.1 ? targetData.s.eyeBlinkLeft * (targetData.b || 1) : 0);
-          const jaw = targetData.s.jawOpen || 0;
-          exp.setValue("blinkRight", exp.getValue("blinkRight") + (blinkR - exp.getValue("blinkRight")) * lerpSpeed);
-          exp.setValue("blinkLeft", exp.getValue("blinkLeft") + (blinkL - exp.getValue("blinkLeft")) * lerpSpeed);
-          exp.setValue("aa", exp.getValue("aa") + (jaw - exp.getValue("aa")) * mouthSpeed);
-        }
+          const bSense = targetData.b || 1.0;
+
+          // 1. 全表情（52種）をループで処理
+          for (const [key, rawValue] of Object.entries(targetData.s)) {
+            let finalValue = rawValue;
+
+            // 2. まばたきだけ感度(bSense)を適用する
+            if (key === "eyeBlinkLeft" || key === "eyeBlinkRight") {
+              finalValue = Math.min(1.0, (rawValue > 0.1 ? rawValue * bSense : 0));
+              // VRM1.0の標準名に変換してセット
+              const vrmKey = (key === "eyeBlinkLeft") ? "blinkLeft" : "blinkRight";
+              exp.setValue(vrmKey, exp.getValue(vrmKey) + (finalValue - exp.getValue(vrmKey)) * lerpSpeed);
+            } else {
+              // 3. それ以外の表情（眉毛、口の歪み、aa等）を適用
+              // 1.0の規格名とMediapipe名はほぼ一致しているのでそのままセット
+              const currentVal = exp.getValue(key) || 0;
+              const speed = (key === "aa" || key === "jawOpen") ? mouthSpeed : lerpSpeed;
+              exp.setValue(key, currentVal + (finalValue - currentVal) * speed);
+            }
+          }
+        }                
         currentVrm.update(1.0/60.0);
       }
       renderer.render(scene, camera);
@@ -275,4 +290,5 @@
 
 </body>
 </html>
+
 
