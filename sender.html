@@ -406,6 +406,9 @@
 
         connStatus.innerText = "VRM準備OK";
         connStatus.style.color = "#00ff00";
+
+        // LookAt: カメラ目線を設定
+        if (currentVrm.lookAt) currentVrm.lookAt.target = camera;
       });
     }
 
