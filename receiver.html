@@ -357,8 +357,6 @@
                 statusEl.innerText = "Model Ready";
                 statusEl.style.color = "#00ff00";
 
-                // LookAt: カメラ目線を設定
-                if (currentVrm.lookAt) currentVrm.lookAt.target = camera;
                 if (targetInput.value.trim() !== "") connectToSender();
             }, undefined, err => {
                 console.error(err);
@@ -483,19 +481,6 @@
                                 exp.setValue(key, currentVal + (finalValue - currentVal) * lerpSpeed);
                             }
                         });
-
-                        // 視線: ARKit eyeLook → VRM lookAt表情に変換 (lerp付き)
-                        const s = targetData.s;
-                        const lookNames = {
-                            lookUp: ((s.eyeLookUpLeft || 0) + (s.eyeLookUpRight || 0)) / 2,
-                            lookDown: ((s.eyeLookDownLeft || 0) + (s.eyeLookDownRight || 0)) / 2,
-                            lookLeft: ((s.eyeLookInLeft || 0) + (s.eyeLookOutRight || 0)) / 2,
-                            lookRight: ((s.eyeLookOutLeft || 0) + (s.eyeLookInRight || 0)) / 2
-                        };
-                        Object.entries(lookNames).forEach(([k, v]) => {
-                            const cur = exp.getValue(k) || 0;
-                            exp.setValue(k, cur + (v - cur) * lerpSpeed);
-                        });
                     } else {
                         // --- PS非対応モデル: マッピング適用 + lerp ---
                         const mapped = mapARKitToVRM(targetData.s, bSense);
@@ -508,6 +493,25 @@
                             const speed = (name === 'aa' || name === 'ih' || name === 'ou' || name === 'ee' || name === 'oh') ? mouthSpeed : lerpSpeed;
                             exp.setValue(name, current + (target - current) * speed);
                         });
+                    }
+                }
+
+                // 目のボーン直接回転 (ARKit視線データ → ボーン回転 + lerp)
+                if (targetData.s) {
+                    const leftEye = currentVrm.humanoid.getNormalizedBoneNode("leftEye");
+                    const rightEye = currentVrm.humanoid.getNormalizedBoneNode("rightEye");
+                    if (leftEye && rightEye) {
+                        const s = targetData.s;
+                        const mp = 10 * Math.PI / 180;
+                        const my = 7 * Math.PI / 180;
+                        const tPL = ((s.eyeLookDownLeft || 0) - (s.eyeLookUpLeft || 0)) * mp;
+                        const tYL = ((s.eyeLookOutLeft || 0) - (s.eyeLookInLeft || 0)) * my;
+                        const tPR = ((s.eyeLookDownRight || 0) - (s.eyeLookUpRight || 0)) * mp;
+                        const tYR = ((s.eyeLookInRight || 0) - (s.eyeLookOutRight || 0)) * my;
+                        leftEye.rotation.x += (tPL - leftEye.rotation.x) * lerpSpeed;
+                        leftEye.rotation.y += (tYL - leftEye.rotation.y) * lerpSpeed;
+                        rightEye.rotation.x += (tPR - rightEye.rotation.x) * lerpSpeed;
+                        rightEye.rotation.y += (tYR - rightEye.rotation.y) * lerpSpeed;
                     }
                 }
 
@@ -527,3 +531,6 @@
 </body>
 
 </html>
+
+</html>
+
