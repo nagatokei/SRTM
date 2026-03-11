@@ -484,7 +484,7 @@
               VRM_STANDARD_EXPRESSIONS.forEach(name => exp.setValue(name, 0));
               categories.forEach(c => exp.setValue(c.categoryName, 0));
 
-              // eyeLook系はVRMのbone LookAtと干渉するためスキップ
+              // eyeLook系はARKit custom expressionとしてではなく、VRM標準のlookAt表情に変換
               const SKIP_SHAPES = new Set([
                 'eyeBlinkLeft', 'eyeBlinkRight',
                 'eyeLookDownLeft', 'eyeLookDownRight', 'eyeLookInLeft', 'eyeLookInRight',
@@ -492,7 +492,7 @@
               ]);
 
               if (modelHasPS) {
-                // PS対応モデル: ARKit直接適用 (eyeLook除外)
+                // PS対応モデル: ARKit直接適用 (eyeLook→VRM lookAt変換)
                 categories.forEach(c => {
                   if (!SKIP_SHAPES.has(c.categoryName)) {
                     exp.setValue(c.categoryName, c.score);
@@ -502,6 +502,12 @@
                 exp.setValue("blinkRight", Math.min(1.0, (shapes.eyeBlinkRight || 0) * bSense));
                 exp.setValue("aa", mOpen);
                 exp.setValue("jawOpen", mOpen);
+
+                // 視線: ARKit eyeLook → VRM lookAt表情に変換
+                exp.setValue("lookUp", ((shapes.eyeLookUpLeft || 0) + (shapes.eyeLookUpRight || 0)) / 2);
+                exp.setValue("lookDown", ((shapes.eyeLookDownLeft || 0) + (shapes.eyeLookDownRight || 0)) / 2);
+                exp.setValue("lookLeft", ((shapes.eyeLookInLeft || 0) + (shapes.eyeLookOutRight || 0)) / 2);
+                exp.setValue("lookRight", ((shapes.eyeLookOutLeft || 0) + (shapes.eyeLookInRight || 0)) / 2);
               } else {
                 // PS非対応モデル: マッピング適用
                 const shapesWithMic = { ...shapes, jawOpen: mOpen };
