@@ -519,20 +519,8 @@
               exp.setValue("aa", mOpen);
               vData.s = { eyeBlinkLeft: bL, eyeBlinkRight: bR, jawOpen: mOpen, aa: mOpen };
             }
-          }
 
-          if (result && result.facialTransformationMatrixes.length > 0) {
-            const rawRot = new THREE.Quaternion().setFromRotationMatrix(new THREE.Matrix4().fromArray(result.facialTransformationMatrixes[0].data));
-            if (shouldResetPose) { offsetRotation.copy(rawRot).invert(); shouldResetPose = false; }
-            let correctedRot = new THREE.Quaternion().multiplyQuaternions(offsetRotation, rawRot);
-            vData.r = [correctedRot.x, correctedRot.y, correctedRot.z, correctedRot.w];
-            const halfRot = new THREE.Quaternion().set(0, 0, 0, 1).slerp(correctedRot, 0.5);
-            const head = currentVrm.humanoid.getNormalizedBoneNode("head"), neck = currentVrm.humanoid.getNormalizedBoneNode("neck");
-            if (head && neck) { neck.quaternion.copy(halfRot); head.quaternion.copy(halfRot); }
-          }
-
-          // 目のボーン直接回転 (ARKit視線データ → ボーン回転)
-          if (result && result.faceBlendshapes.length > 0) {
+            // 目のボーン直接回転 (ARKit視線データ → ボーン回転)
             const leftEye = currentVrm.humanoid.getNormalizedBoneNode("leftEye");
             const rightEye = currentVrm.humanoid.getNormalizedBoneNode("rightEye");
             if (leftEye && rightEye) {
@@ -545,6 +533,16 @@
                 ((shapes.eyeLookDownRight || 0) - (shapes.eyeLookUpRight || 0)) * mp,
                 ((shapes.eyeLookInRight || 0) - (shapes.eyeLookOutRight || 0)) * my, 0);
             }
+          }
+
+          if (result && result.facialTransformationMatrixes.length > 0) {
+            const rawRot = new THREE.Quaternion().setFromRotationMatrix(new THREE.Matrix4().fromArray(result.facialTransformationMatrixes[0].data));
+            if (shouldResetPose) { offsetRotation.copy(rawRot).invert(); shouldResetPose = false; }
+            let correctedRot = new THREE.Quaternion().multiplyQuaternions(offsetRotation, rawRot);
+            vData.r = [correctedRot.x, correctedRot.y, correctedRot.z, correctedRot.w];
+            const halfRot = new THREE.Quaternion().set(0, 0, 0, 1).slerp(correctedRot, 0.5);
+            const head = currentVrm.humanoid.getNormalizedBoneNode("head"), neck = currentVrm.humanoid.getNormalizedBoneNode("neck");
+            if (head && neck) { neck.quaternion.copy(halfRot); head.quaternion.copy(halfRot); }
           }
         }
         connections.forEach(conn => { if (conn.open) conn.send(vData); });
@@ -580,3 +578,4 @@
 </body>
 
 </html>
+
