@@ -453,6 +453,13 @@
 
                     if (modelHasPS) {
                         // --- PS対応モデル: ARKit直接適用 + lerp ---
+                        // eyeLook系はVRMのbone LookAtと干渉するためスキップ
+                        const SKIP_SHAPES = new Set([
+                            'eyeBlinkLeft', 'eyeBlinkRight',
+                            'eyeLookDownLeft', 'eyeLookDownRight', 'eyeLookInLeft', 'eyeLookInRight',
+                            'eyeLookOutLeft', 'eyeLookOutRight', 'eyeLookUpLeft', 'eyeLookUpRight'
+                        ]);
+
                         Object.keys(targetData.s).forEach(key => {
                             const rawValue = targetData.s[key];
                             let finalValue = rawValue;
@@ -468,7 +475,7 @@
                                 exp.setValue("aa", currentAa + (finalValue - currentAa) * mouthSpeed);
                                 exp.setValue("jawOpen", currentAa + (finalValue - currentAa) * mouthSpeed);
                             }
-                            else {
+                            else if (!SKIP_SHAPES.has(key)) {
                                 const currentVal = exp.getValue(key) || 0;
                                 exp.setValue(key, currentVal + (finalValue - currentVal) * lerpSpeed);
                             }
@@ -504,4 +511,3 @@
 </body>
 
 </html>
-
