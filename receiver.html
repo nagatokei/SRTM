@@ -2,535 +2,579 @@
 <html>
 
 <head>
-    <meta charset="utf-8">
-    <title>VRM Stable Receiver - Stealth & Secure</title>
-    <style>
-        body {
-            margin: 0;
-            background: transparent;
-            color: white;
-            font-family: 'Segoe UI', sans-serif;
-            overflow: hidden;
-            width: 100vw;
-            height: 100vh;
-        }
+  <meta charset="utf-8">
+  <title>VRM Sender (Dual Mode)</title>
+  <style>
+    body {
+      margin: 0;
+      background: #000;
+      color: white;
+      font-family: sans-serif;
+      overflow: hidden;
+    }
 
-        /* ステルスUI：マウスがウィンドウ内にある時だけ表示 */
-        #ui_panel {
-            position: absolute;
-            top: 15px;
-            left: 15px;
-            background: rgba(15, 15, 15, 0.95);
-            padding: 18px;
-            z-index: 100;
-            border-radius: 12px;
-            width: 280px;
-            border: 1px solid #333;
-            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.8);
-            transition: opacity 0.4s ease, visibility 0.4s;
-            opacity: 0;
-            visibility: hidden;
-        }
+    #ui_panel {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      background: rgba(0, 0, 0, 0.85);
+      padding: 15px;
+      z-index: 10;
+      border-radius: 8px;
+      border: 1px solid #555;
+      width: 280px;
+      max-height: 90vh;
+      overflow-y: auto;
+    }
 
-        /* マウスホバーでふわっと出現 */
-        body:hover #ui_panel {
-            opacity: 1;
-            visibility: visible;
-        }
+    .control-group {
+      margin-bottom: 12px;
+    }
 
-        .panel-title {
-            font-size: 14px;
-            font-weight: bold;
-            color: #0078d4;
-            margin-bottom: 15px;
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-        }
+    label {
+      display: block;
+      font-size: 11px;
+      margin-bottom: 3px;
+      color: #ccc;
+    }
 
-        .control-group {
-            margin-bottom: 15px;
-        }
+    input[type="range"] {
+      width: 100%;
+      cursor: pointer;
+    }
 
-        label {
-            display: block;
-            font-size: 11px;
-            color: #888;
-            margin-bottom: 6px;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-        }
+    input[type="text"],
+    input[type="file"] {
+      width: 100%;
+      padding: 5px;
+      background: #222;
+      color: #fff;
+      border: 1px solid #666;
+      border-radius: 4px;
+      box-sizing: border-box;
+      font-size: 12px;
+    }
 
-        .input-wrapper {
-            position: relative;
-        }
+    button {
+      width: 100%;
+      padding: 8px;
+      cursor: pointer;
+      background: #0078d4;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      font-weight: bold;
+      margin-top: 10px;
+    }
 
-        /* 伏せ字設定（password）と読みやすさの両立 */
-        input[type="password"] {
-            width: 100%;
-            padding: 8px 10px;
-            background: #252525;
-            color: #fff;
-            border: 1px solid #444;
-            border-radius: 6px;
-            box-sizing: border-box;
-            font-family: caption;
-            letter-spacing: 0.2em;
-            outline: none;
-        }
+    button:hover {
+      background: #005a9e;
+    }
 
-        .clear-btn {
-            position: absolute;
-            right: 8px;
-            top: 50%;
-            transform: translateY(-50%);
-            cursor: pointer;
-            color: #666;
-            font-size: 14px;
-            z-index: 5;
-        }
+    .btn-secondary {
+      background: #444;
+      font-size: 11px;
+      margin-top: 5px;
+    }
 
-        .clear-btn:hover {
-            color: #fff;
-        }
+    #mic_bar_bg {
+      width: 100%;
+      height: 6px;
+      background: #333;
+      border-radius: 3px;
+      margin-top: 5px;
+      overflow: hidden;
+    }
 
-        .btn-main {
-            width: 100%;
-            padding: 12px;
-            cursor: pointer;
-            background: #0078d4;
-            color: white;
-            border: none;
-            border-radius: 6px;
-            font-weight: bold;
-            transition: 0.2s;
-            margin-top: 5px;
-        }
+    #mic_bar_fill {
+      width: 0%;
+      height: 100%;
+      background: #00ff00;
+    }
 
-        .btn-main.online {
-            background: #28a745;
-        }
+    #video_ui {
+      position: absolute;
+      bottom: 10px;
+      right: 10px;
+      width: 160px;
+      opacity: 0.5;
+    }
 
-        #status {
-            font-size: 12px;
-            color: #ffcc00;
-            margin-top: 12px;
-            text-align: center;
-            font-weight: 500;
-            min-height: 1.2em;
-        }
+    video {
+      width: 100%;
+      transform: scaleX(-1);
+      border-radius: 4px;
+    }
 
-        hr {
-            border: 0;
-            border-top: 1px solid #333;
-            margin: 15px 0;
-        }
+    #conn_status {
+      font-size: 12px;
+      color: #ffcc00;
+      margin-top: 10px;
+      font-weight: bold;
+      text-align: center;
+    }
 
-        #model_type_badge {
-            font-size: 10px;
-            padding: 2px 6px;
-            border-radius: 4px;
-            color: #888;
-            background: #333;
-        }
+    hr {
+      border: 0;
+      border-top: 1px solid #444;
+      margin: 15px 0;
+    }
 
-        .badge-ps {
-            background: #28a745 !important;
-            color: #fff !important;
-        }
+    .val-disp {
+      float: right;
+      color: #fff;
+      font-weight: bold;
+    }
 
-        .badge-mapped {
-            background: #ffc107 !important;
-            color: #000 !important;
-        }
-    </style>
-    <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+    .mode-switch {
+      background: #333;
+      padding: 10px;
+      border-radius: 4px;
+      border: 1px solid #0078d4;
+      margin: 10px 0;
+    }
+
+    #model_type_badge {
+      display: none;
+      font-size: 11px;
+      padding: 4px 10px;
+      border-radius: 4px;
+      margin-top: 6px;
+      font-weight: bold;
+      text-align: center;
+    }
+
+    .badge-ps {
+      background: #28a745;
+      color: #fff;
+    }
+
+    .badge-mapped {
+      background: #ffc107;
+      color: #000;
+    }
+  </style>
+  <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
 </head>
 
 <body>
 
-    <div id="ui_panel">
-        <div class="panel-title">
-            <span>VRM RECEIVER</span>
-            <span id="model_type_badge">No Model</span>
-        </div>
+  <div id="ui_panel">
+    <b style="font-size: 14px;">VRM Sender (Dual Mode)</b>
+    <div id="model_type_badge"></div>
 
-        <div class="control-group">
-            <label>Local VRM File</label>
-            <input type="file" id="vrm_file" accept=".vrm">
-        </div>
-
-        <hr>
-
-        <div class="control-group">
-            <label>Transmitter ID (Secure)</label>
-            <div class="input-wrapper">
-                <input type="password" id="target_id" placeholder="IDを入力してください">
-                <span class="clear-btn" onclick="document.getElementById('target_id').value=''">✕</span>
-            </div>
-            <button id="btn_connect" class="btn-main">CONNECT</button>
-        </div>
-
-        <div id="status">Waiting for VRM...</div>
+    <div class="control-group" style="margin-top:15px;">
+      <label>1. VRMファイルを選択:</label>
+      <input type="file" id="vrm_file" accept=".vrm">
     </div>
 
-    <script type="importmap">
+    <div class="mode-switch">
+      <label style="color: #0078d4; font-weight: bold; display: flex; align-items: center; cursor: pointer;">
+        <input type="checkbox" id="psync_mode" checked style="margin-right: 8px;"> 拡張表情モード
+      </label>
+      <div style="font-size: 9px; color: #aaa; margin-top: 4px;">
+        ON: 全表情取得＋自動マッピング / OFF: 基本動作のみ (軽量)
+      </div>
+    </div>
+
+    <div class="control-group">
+      <label>2. 送信ID / 開始:</label>
+      <div style="display: flex; gap: 5px;">
+        <input type="text" id="room_id" readonly style="flex: 1;">
+        <button id="btn_copy" class="btn-secondary" style="width: auto; margin: 0; padding: 0 10px;">コピー</button>
+      </div>
+      <button id="btn_start">カメラ・マイク・配信 開始</button>
+      <div id="conn_status">VRMを選択してください</div>
+
+      <div id="live_indicator"
+        style="display:none; font-size:12px; color:#ff4444; text-align:center; margin-top:8px; font-weight:bold; letter-spacing: 1px;">
+        <span class="blink_dot">●</span> CAMERA ACTIVE
+      </div>
+      <style>
+        .blink_dot {
+          animation: blink 1.2s infinite;
+          margin-right: 4px;
+        }
+
+        @keyframes blink {
+          0% {
+            opacity: 1;
+          }
+
+          50% {
+            opacity: 0.2;
+          }
+
+          100% {
+            opacity: 1;
+          }
+        }
+      </style>
+
+      <div id="mic_bar_bg">
+        <div id="mic_bar_fill"></div>
+      </div>
+    </div>
+
+    <hr>
+
+    <div class="control-group">
+      <label>姿勢制御</label>
+      <button id="btn_reset_pose" class="btn-secondary">正面リセット (顔の向きを直す)</button>
+    </div>
+
+    <div class="control-group">
+      <label>高さ調整: <span class="val-disp" id="v_h">0.00</span></label>
+      <input type="range" id="s_h" min="-0.5" max="0.5" step="0.01" value="0.0">
+    </div>
+
+    <div class="control-group">
+      <label>キャラの大きさ: <span class="val-disp" id="v_scale">1.0</span></label>
+      <input type="range" id="s_scale" min="0.1" max="2.0" step="0.05" value="1.0">
+    </div>
+
+    <div class="control-group">
+      <label>左腕の角度: <span class="val-disp" id="v_l">0</span>°</label>
+      <input type="range" id="s_l" min="-90" max="90" step="1" value="-60">
+    </div>
+
+    <div class="control-group">
+      <label>右腕の角度: <span class="val-disp" id="v_r">0</span>°</label>
+      <input type="range" id="s_r" min="-90" max="90" step="1" value="-60">
+    </div>
+
+    <div class="control-group">
+      <label>まばたき感度: <span class="val-disp" id="v_blink">1.5</span></label>
+      <input type="range" id="s_blink" min="1.0" max="3.0" step="0.1" value="1.5">
+    </div>
+
+    <div class="control-group">
+      <label>マイク感度(口パク): <span class="val-disp" id="v_mic">2.5</span></label>
+      <input type="range" id="s_mic" min="0.5" max="10.0" step="0.1" value="2.5">
+    </div>
+  </div>
+
+  <div id="video_ui" style="display: none;">
+    <video id="input_video" autoplay playsinline muted></video>
+  </div>
+
+  <script type="importmap">
     {
       "imports": {
         "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
         "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/",
-        "@pixiv/three-vrm": "https://cdn.jsdelivr.net/npm/@pixiv/three-vrm@2.1.0/lib/three-vrm.module.js"
+        "@pixiv/three-vrm": "https://cdn.jsdelivr.net/npm/@pixiv/three-vrm@2.1.0/lib/three-vrm.module.js",
+        "@mediapipe/tasks-vision": "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.3/vision_bundle.mjs"
       }
     }
   </script>
 
-    <script type="module">
-        import * as THREE from 'three';
-        import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-        import { VRMLoaderPlugin } from '@pixiv/three-vrm';
+  <script type="module">
+    import * as THREE from 'three';
+    import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+    import { VRMLoaderPlugin } from '@pixiv/three-vrm';
+    import { FaceLandmarker, FilesetResolver } from '@mediapipe/tasks-vision';
 
-        // ====== DOM要素 ======
-        const statusEl = document.getElementById("status");
-        const targetInput = document.getElementById("target_id");
-        const connectBtn = document.getElementById("btn_connect");
-        const modelBadge = document.getElementById("model_type_badge");
-        const uiPanel = document.getElementById("ui_panel");
+    const video = document.getElementById("input_video");
+    const connStatus = document.getElementById("conn_status");
+    const micBarFill = document.getElementById("mic_bar_fill");
+    const roomIdInput = document.getElementById("room_id");
+    const psyncToggle = document.getElementById("psync_mode");
+    const modelBadge = document.getElementById("model_type_badge");
 
-        // ====== 状態変数 ======
-        let currentVrm, scene, camera, renderer, peer, conn, currentVrmUrl;
-        let reconnectTimer = null;
-        let modelHasPS = false; // VRMモデルがPerfect Sync対応かどうか
-        let targetData = { h: 0, la: 0, ra: 0, r: [0, 0, 0, 1], s: null, b: 1.0, s_scale: 1.0 };
+    const s_h = document.getElementById("s_h"), s_l = document.getElementById("s_l"), s_r = document.getElementById("s_r");
+    const s_blink = document.getElementById("s_blink"), s_mic = document.getElementById("s_mic");
 
-        // ====== パーフェクトシンク自動検出 ======
-        function isPerfectSyncModel(vrm) {
-            if (!vrm || !vrm.expressionManager) return false;
-            const testNames = ['browDownLeft', 'cheekPuff', 'noseSneerLeft'];
-            return testNames.some(name => vrm.expressionManager.getExpression(name) != null);
-        }
+    let currentVrm, faceLandmarker, lastVideoTime = -1;
+    let peer, connections = [], audioContext, analyser, dataArray, currentVolume = 0;
+    let offsetRotation = new THREE.Quaternion(), shouldResetPose = false;
+    let modelHasPS = false;
 
-        // ====== ARKit → VRM 標準表情マッピング ======
-        const VRM_STANDARD_EXPRESSIONS = [
-            'happy', 'angry', 'sad', 'relaxed', 'surprised',
-            'blinkLeft', 'blinkRight',
-            'aa', 'ih', 'ou', 'ee', 'oh',
-            'lookUp', 'lookDown', 'lookLeft', 'lookRight'
-        ];
+    // ====== パーフェクトシンク自動検出 ======
+    function isPerfectSyncModel(vrm) {
+      if (!vrm || !vrm.expressionManager) return false;
+      const testNames = ['browDownLeft', 'cheekPuff', 'noseSneerLeft'];
+      return testNames.some(name => vrm.expressionManager.getExpression(name) != null);
+    }
 
-        function mapARKitToVRM(shapes, blinkSensitivity) {
-            const get = (name) => shapes[name] || 0;
-            const mapped = {};
+    // ====== ARKit → VRM 標準表情マッピング ======
+    const VRM_STANDARD_EXPRESSIONS = [
+      'happy', 'angry', 'sad', 'relaxed', 'surprised',
+      'blinkLeft', 'blinkRight',
+      'aa', 'ih', 'ou', 'ee', 'oh',
+      'lookUp', 'lookDown', 'lookLeft', 'lookRight'
+    ];
 
-            // --- まばたき ---
-            mapped.blinkLeft = Math.min(1.0, get('eyeBlinkLeft') * blinkSensitivity);
-            mapped.blinkRight = Math.min(1.0, get('eyeBlinkRight') * blinkSensitivity);
+    function mapARKitToVRM(shapes, blinkSensitivity) {
+      const get = (name) => shapes[name] || 0;
+      const mapped = {};
 
-            // --- 口形素 (日本語母音) ---
-            const jawOpen = get('jawOpen');
-            const pucker = get('mouthPucker');
-            const funnel = get('mouthFunnel');
-            const smileL = get('mouthSmileLeft');
-            const smileR = get('mouthSmileRight');
-            const stretchL = get('mouthStretchLeft');
-            const stretchR = get('mouthStretchRight');
-            const stretch = (stretchL + stretchR) / 2;
-            const smile = (smileL + smileR) / 2;
+      // まばたき
+      mapped.blinkLeft = Math.min(1.0, get('eyeBlinkLeft') * blinkSensitivity);
+      mapped.blinkRight = Math.min(1.0, get('eyeBlinkRight') * blinkSensitivity);
 
-            // あ: 口が大きく開く
-            mapped.aa = Math.min(1.0, jawOpen * Math.max(0.2, 1.0 - pucker - funnel));
-            // い: 横に引く、ほぼ閉じた口
-            mapped.ih = Math.min(1.0, Math.max(stretch, smile * 0.5) * Math.max(0, 1.0 - jawOpen * 1.5) * 1.2);
-            // う: 唇をすぼめる
-            mapped.ou = Math.min(1.0, pucker);
-            // え: 口が開く＋横に引く
-            mapped.ee = Math.min(1.0, jawOpen * Math.max(stretch, smile * 0.3) * 2.0);
-            // お: 丸い口
-            mapped.oh = Math.min(1.0, funnel);
+      // 口形素
+      const jawOpen = get('jawOpen');
+      const pucker = get('mouthPucker');
+      const funnel = get('mouthFunnel');
+      const smileL = get('mouthSmileLeft');
+      const smileR = get('mouthSmileRight');
+      const stretchL = get('mouthStretchLeft');
+      const stretchR = get('mouthStretchRight');
+      const stretch = (stretchL + stretchR) / 2;
+      const smile = (smileL + smileR) / 2;
 
-            // --- 感情表現 (上限0.5) ---
-            const frown = (get('mouthFrownLeft') + get('mouthFrownRight')) / 2;
-            const eyeWide = (get('eyeWideLeft') + get('eyeWideRight')) / 2;
-            const browDown = (get('browDownLeft') + get('browDownRight')) / 2;
-            const browUp = (get('browInnerUp') + get('browOuterUpLeft') + get('browOuterUpRight')) / 3;
+      mapped.aa = Math.min(1.0, jawOpen * Math.max(0.2, 1.0 - pucker - funnel));
+      mapped.ih = Math.min(1.0, Math.max(stretch, smile * 0.5) * Math.max(0, 1.0 - jawOpen * 1.5) * 1.2);
+      mapped.ou = Math.min(1.0, pucker);
+      mapped.ee = Math.min(1.0, jawOpen * Math.max(stretch, smile * 0.3) * 2.0);
+      mapped.oh = Math.min(1.0, funnel);
 
-            mapped.happy = Math.min(0.5, Math.max(0, smile - 0.25) * 0.8);
-            mapped.angry = Math.min(0.5, Math.max(0, (frown * 0.6 + browDown * 0.4) - 0.2) * 1.0);
-            mapped.surprised = Math.min(0.5, Math.max(0, (eyeWide * 0.5 + browUp * 0.5) - 0.15) * 1.0);
+      // 感情 (上限0.5)
+      const frown = (get('mouthFrownLeft') + get('mouthFrownRight')) / 2;
+      const eyeWide = (get('eyeWideLeft') + get('eyeWideRight')) / 2;
+      const browDown = (get('browDownLeft') + get('browDownRight')) / 2;
+      const browUp = (get('browInnerUp') + get('browOuterUpLeft') + get('browOuterUpRight')) / 3;
 
-            // 感情値の正規化
-            const eSum = mapped.happy + mapped.angry + mapped.surprised;
-            if (eSum > 0.6) {
-                const s = 0.6 / eSum;
-                mapped.happy *= s;
-                mapped.angry *= s;
-                mapped.surprised *= s;
-            }
+      mapped.happy = Math.min(0.5, Math.max(0, smile - 0.25) * 0.8);
+      mapped.angry = Math.min(0.5, Math.max(0, (frown * 0.6 + browDown * 0.4) - 0.2) * 1.0);
+      mapped.surprised = Math.min(0.5, Math.max(0, (eyeWide * 0.5 + browUp * 0.5) - 0.15) * 1.0);
 
-            // --- 視線 ---
-            mapped.lookUp = (get('eyeLookUpLeft') + get('eyeLookUpRight')) / 2;
-            mapped.lookDown = (get('eyeLookDownLeft') + get('eyeLookDownRight')) / 2;
-            mapped.lookLeft = (get('eyeLookInLeft') + get('eyeLookOutRight')) / 2;
-            mapped.lookRight = (get('eyeLookOutLeft') + get('eyeLookInRight')) / 2;
+      const eSum = mapped.happy + mapped.angry + mapped.surprised;
+      if (eSum > 0.6) {
+        const s = 0.6 / eSum;
+        mapped.happy *= s;
+        mapped.angry *= s;
+        mapped.surprised *= s;
+      }
 
-            return mapped;
-        }
+      // 視線
+      mapped.lookUp = (get('eyeLookUpLeft') + get('eyeLookUpRight')) / 2;
+      mapped.lookDown = (get('eyeLookDownLeft') + get('eyeLookDownRight')) / 2;
+      mapped.lookLeft = (get('eyeLookInLeft') + get('eyeLookOutRight')) / 2;
+      mapped.lookRight = (get('eyeLookOutLeft') + get('eyeLookInRight')) / 2;
 
-        // ====== リンク変換関数 (OneDrive対応版) ======
-        function fixDirectUrl(url) {
-            if (!url) return url;
-            let d = url;
+      return mapped;
+    }
 
-            // 1. OneDrive (1drv.ms) 対応
-            if (d.includes("1drv.ms")) {
-                try {
-                    const b64 = btoa(d).replace(/\//g, '_').replace(/\+/g, '-').replace(/=/g, '');
-                    return `https://api.onedrive.com/v1.0/shares/u!${b64}/root/content`;
-                } catch (e) { return d; }
-            }
+    let savedRoomId = localStorage.getItem('last_room_id') || ("vrm-" + Math.random().toString(36).substring(2, 10));
+    localStorage.setItem('last_room_id', savedRoomId);
+    roomIdInput.value = savedRoomId;
 
-            // 2. Dropbox対応
-            if (d.includes("www.dropbox.com")) {
-                d = d.replace("www.dropbox.com", "dl.dropboxusercontent.com").replace(/\?dl=[01]/, "");
-            }
+    document.getElementById("btn_copy").onclick = () => {
+      navigator.clipboard.writeText(roomIdInput.value).then(() => {
+        const btn = document.getElementById("btn_copy");
+        btn.innerText = "OK!";
+        setTimeout(() => { btn.innerText = "コピー"; }, 2000);
+      });
+    };
 
-            // 3. Google Drive対応
-            if (d.includes("drive.google.com")) {
-                const match = d.match(/\/d\/([^\/]+)/);
-                if (match) d = `https://docs.google.com/uc?id=${match[1]}&export=download`;
-            }
+    document.getElementById("btn_reset_pose").onclick = () => { shouldResetPose = true; };
 
-            return d;
-        }
+    const dbName = "VRM_Storage", storeName = "models";
+    const openDb = () => new Promise(res => {
+      const req = indexedDB.open(dbName, 1);
+      req.onupgradeneeded = e => e.target.result.createObjectStore(storeName);
+      req.onsuccess = e => res(e.target.result);
+    });
 
-        // ====== URL/記憶の処理 ======
-        const urlParams = new URLSearchParams(window.location.search);
-        const urlId = urlParams.get('id');
-        const urlVrm = urlParams.get('vrm');
+    document.getElementById("vrm_file").onchange = async (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      const db = await openDb();
+      db.transaction(storeName, "readwrite").objectStore(storeName).put(file, "last_vrm");
+      loadVRM(file);
+    };
 
-        targetInput.value = (urlId && urlId.trim() !== "") ? urlId.trim() : "";
+    function loadVRM(fileOrBlob) {
+      const url = URL.createObjectURL(fileOrBlob);
+      new GLTFLoader().register(p => new VRMLoaderPlugin(p)).load(url, gltf => {
+        if (currentVrm) scene.remove(currentVrm.scene);
+        currentVrm = gltf.userData.vrm;
+        scene.add(gltf.scene);
+        currentVrm.scene.scale.set(-1, 1, 1);
 
-        let vrmToLoad = null;
-        if (urlVrm && urlVrm.trim() !== "") {
-            vrmToLoad = fixDirectUrl(urlVrm);
-            localStorage.setItem("vrm_save_url", urlVrm);
+        modelHasPS = isPerfectSyncModel(currentVrm);
+        modelBadge.style.display = "block";
+        if (modelHasPS) {
+          modelBadge.innerText = "PS対応";
+          modelBadge.className = "badge-ps";
         } else {
-            const savedVrm = localStorage.getItem("vrm_save_url");
-            if (savedVrm && savedVrm.trim() !== "") {
-                vrmToLoad = fixDirectUrl(savedVrm);
-            }
+          modelBadge.innerText = "自動マッピング";
+          modelBadge.className = "badge-mapped";
         }
 
-        // ファイル選択時の処理
-        document.getElementById("vrm_file").onchange = (e) => {
-            const file = e.target.files[0];
-            if (!file) return;
-            if (currentVrmUrl) URL.revokeObjectURL(currentVrmUrl);
-            currentVrmUrl = URL.createObjectURL(file);
-            loadVRM(currentVrmUrl);
-        };
+        connStatus.innerText = "VRM準備OK";
+        connStatus.style.color = "#00ff00";
+      });
+    }
 
-        connectBtn.onclick = () => {
-            if (reconnectTimer) clearInterval(reconnectTimer);
-            connectToSender();
-        };
+    (async () => {
+      const db = await openDb();
+      const req = db.transaction(storeName).objectStore(storeName).get("last_vrm");
+      req.onsuccess = () => { if (req.result) loadVRM(req.result); };
+    })();
 
-        // ====== VRM読み込み ======
-        function loadVRM(url) {
-            statusEl.innerText = "Loading VRM...";
-            new GLTFLoader().register(p => new VRMLoaderPlugin(p)).load(url, gltf => {
-                if (currentVrm) scene.remove(currentVrm.scene);
-                currentVrm = gltf.userData.vrm;
-                scene.add(gltf.scene);
-                currentVrm.scene.scale.set(-1, 1, 1);
+    document.getElementById("btn_start").onclick = async () => {
+      if (!currentVrm) { alert("VRMを選択してください"); return; }
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: { width: 640, height: 480 } });
+        video.srcObject = stream;
+        video.play();
+        audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        const source = audioContext.createMediaStreamSource(stream);
+        analyser = audioContext.createAnalyser();
+        analyser.fftSize = 256;
+        source.connect(analyser);
+        dataArray = new Uint8Array(analyser.frequencyBinCount);
+        if (peer) peer.destroy();
+        peer = new Peer(roomIdInput.value);
+        peer.on('open', id => { connStatus.innerText = "配信中: " + id; document.getElementById("live_indicator").style.display = "block"; });
+        peer.on('connection', conn => { conn.on('open', () => connections.push(conn)); });
+      } catch (e) { alert("カメラ/マイクの起動に失敗しました"); }
+    };
 
-                // パーフェクトシンク自動検出
-                modelHasPS = isPerfectSyncModel(currentVrm);
-                if (modelHasPS) {
-                    modelBadge.innerText = "PS対応";
-                    modelBadge.className = "badge-ps";
-                } else {
-                    modelBadge.innerText = "自動マッピング";
-                    modelBadge.className = "badge-mapped";
-                }
-                console.log("VRM loaded. Perfect Sync model:", modelHasPS);
+    function animate() {
+      requestAnimationFrame(animate);
+      if (analyser) {
+        analyser.getByteFrequencyData(dataArray);
+        currentVolume = (dataArray.reduce((a, b) => a + b, 0) / dataArray.length) / 128.0;
+        micBarFill.style.width = Math.min(100, currentVolume * 400) + "%";
+      }
 
-                statusEl.innerText = "Model Ready";
-                statusEl.style.color = "#00ff00";
+      if (video.readyState >= 2 && video.currentTime !== lastVideoTime) {
+        lastVideoTime = video.currentTime;
+        const result = faceLandmarker ? faceLandmarker.detectForVideo(video, performance.now()) : null;
 
-                if (targetInput.value.trim() !== "") connectToSender();
-            }, undefined, err => {
-                console.error(err);
-                statusEl.innerText = "Load Failed";
-                statusEl.style.color = "#ff4444";
-            });
-        }
+        const h = parseFloat(s_h.value), l = parseFloat(s_l.value), r = parseFloat(s_r.value);
+        const bSense = parseFloat(s_blink.value), mSense = parseFloat(s_mic.value);
+        const scaleVal = parseFloat(document.getElementById("s_scale").value);
 
-        // ====== 接続処理 ======
-        function connectToSender() {
-            const targetId = targetInput.value.trim();
-            if (!currentVrm || !targetId) return;
-            if (peer) peer.destroy();
-            peer = new Peer();
-            connectBtn.innerText = "CONNECTING...";
-            peer.on('open', () => {
-                conn = peer.connect(targetId);
-                conn.on('open', () => {
-                    statusEl.innerText = "Online";
-                    statusEl.style.color = "#00ff00";
-                    uiPanel.classList.add("connected");
-                    connectBtn.innerText = "CONNECTED";
-                    connectBtn.className = "btn-main online";
-                    if (reconnectTimer) { clearInterval(reconnectTimer); reconnectTimer = null; }
+        document.getElementById("v_h").innerText = h.toFixed(2);
+        document.getElementById("v_l").innerText = l;
+        document.getElementById("v_r").innerText = r;
+        document.getElementById("v_blink").innerText = bSense;
+        document.getElementById("v_mic").innerText = mSense;
+        document.getElementById("v_scale").innerText = scaleVal.toFixed(2);
+
+        const isPSync = psyncToggle.checked;
+        const vData = { h, la: l, ra: r, b: bSense, s: {}, r: null, s_scale: scaleVal };
+
+        if (currentVrm) {
+          currentVrm.scene.scale.set(-scaleVal, scaleVal, scaleVal);
+          currentVrm.scene.position.y = h;
+          const armL = currentVrm.humanoid.getNormalizedBoneNode("leftUpperArm");
+          const armR = currentVrm.humanoid.getNormalizedBoneNode("rightUpperArm");
+          if (armL) armL.rotation.z = THREE.MathUtils.degToRad(l);
+          if (armR) armR.rotation.z = THREE.MathUtils.degToRad(-r);
+
+          const exp = currentVrm.expressionManager;
+
+          if (result && result.faceBlendshapes.length > 0) {
+            const categories = result.faceBlendshapes[0].categories;
+            const shapes = {};
+            categories.forEach(c => { shapes[c.categoryName] = c.score; });
+            const mOpen = Math.max(shapes.jawOpen || 0, currentVolume * mSense);
+
+            if (isPSync) {
+              // 拡張表情モード: 全表情リセット
+              VRM_STANDARD_EXPRESSIONS.forEach(name => exp.setValue(name, 0));
+              categories.forEach(c => exp.setValue(c.categoryName, 0));
+
+              // eyeLook系はARKit custom expressionとしてではなく、VRM標準のlookAt表情に変換
+              const SKIP_SHAPES = new Set([
+                'eyeBlinkLeft', 'eyeBlinkRight',
+                'eyeLookDownLeft', 'eyeLookDownRight', 'eyeLookInLeft', 'eyeLookInRight',
+                'eyeLookOutLeft', 'eyeLookOutRight', 'eyeLookUpLeft', 'eyeLookUpRight'
+              ]);
+
+              if (modelHasPS) {
+                // PS対応モデル: ARKit直接適用 (eyeLook→VRM lookAt変換)
+                categories.forEach(c => {
+                  if (!SKIP_SHAPES.has(c.categoryName)) {
+                    exp.setValue(c.categoryName, c.score);
+                  }
                 });
-                conn.on('data', data => { if (data) targetData = data; });
-                conn.on('close', startReconnect);
-            });
-            peer.on('error', () => startReconnect());
-        }
+                exp.setValue("blinkLeft", Math.min(1.0, (shapes.eyeBlinkLeft || 0) * bSense));
+                exp.setValue("blinkRight", Math.min(1.0, (shapes.eyeBlinkRight || 0) * bSense));
+                exp.setValue("aa", mOpen);
+                exp.setValue("jawOpen", mOpen);
+              } else {
+                // PS非対応モデル: マッピング適用
+                const shapesWithMic = { ...shapes, jawOpen: mOpen };
+                const mapped = mapARKitToVRM(shapesWithMic, bSense);
+                Object.keys(mapped).forEach(key => exp.setValue(key, mapped[key]));
+              }
 
-        function startReconnect() {
-            if (reconnectTimer) return;
-            statusEl.innerText = "Retrying...";
-            uiPanel.classList.remove("connected");
-            connectBtn.innerText = "RECONNECTING...";
-            reconnectTimer = setInterval(connectToSender, 5000);
-        }
+              vData.s = { ...shapes, jawOpen: mOpen };
+            } else {
+              // 基本モード: まばたき＋口パクのみ
+              VRM_STANDARD_EXPRESSIONS.forEach(name => exp.setValue(name, 0));
+              categories.forEach(c => exp.setValue(c.categoryName, 0));
 
-        if (vrmToLoad) loadVRM(vrmToLoad);
-
-        // ====== Three.js シーン ======
-        scene = new THREE.Scene();
-        camera = new THREE.PerspectiveCamera(30, window.innerWidth / window.innerHeight, 0.1, 20.0);
-        camera.position.set(0, 1.4, 1.5);
-        renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
-        renderer.setSize(window.innerWidth, window.innerHeight);
-        renderer.setClearColor(0x000000, 0);
-        document.body.appendChild(renderer.domElement);
-
-        const mainLight = new THREE.DirectionalLight(0xffffff, 2.5);
-        mainLight.position.set(1.0, 2.0, 2.0);
-        scene.add(mainLight);
-        scene.add(new THREE.AmbientLight(0xffffff, 0.4));
-        const camLight = new THREE.PointLight(0xffffff, 0.8, 10);
-        camLight.position.set(0.38, 0.62, 1.0);
-        camera.add(camLight);
-        scene.add(camera);
-
-        // ====== メインループ ======
-        function animate() {
-            requestAnimationFrame(animate);
-            if (currentVrm && targetData) {
-                const lerpSpeed = 0.50;
-                const mouthSpeed = 0.80;
-
-                // 位置・スケール・腕
-                currentVrm.scene.position.y += (targetData.h - currentVrm.scene.position.y) * lerpSpeed;
-                const s = targetData.s_scale || 1.0;
-                const currentS = Math.abs(currentVrm.scene.scale.x);
-                const nextS = currentS + (s - currentS) * lerpSpeed;
-                currentVrm.scene.scale.set(-nextS, nextS, nextS);
-
-                const armL = currentVrm.humanoid.getNormalizedBoneNode("leftUpperArm");
-                const armR = currentVrm.humanoid.getNormalizedBoneNode("rightUpperArm");
-                if (armL) armL.rotation.z += (THREE.MathUtils.degToRad(targetData.la) - armL.rotation.z) * lerpSpeed;
-                if (armR) armR.rotation.z += (THREE.MathUtils.degToRad(-targetData.ra) - armR.rotation.z) * lerpSpeed;
-
-                // 頭の回転
-                if (targetData.r) {
-                    const head = currentVrm.humanoid.getNormalizedBoneNode("head");
-                    const neck = currentVrm.humanoid.getNormalizedBoneNode("neck");
-                    const targetQuat = new THREE.Quaternion().fromArray(targetData.r);
-                    const halfQuat = new THREE.Quaternion().set(0, 0, 0, 1).slerp(targetQuat, 0.5);
-                    if (head && neck) {
-                        neck.quaternion.slerp(halfQuat, lerpSpeed);
-                        head.quaternion.slerp(halfQuat, lerpSpeed);
-                    }
-                }
-
-                // ====== 表情適用 ======
-                if (targetData && targetData.s) {
-                    const exp = currentVrm.expressionManager;
-                    const bSense = targetData.b || 1.5;
-
-                    if (modelHasPS) {
-                        // --- PS対応モデル: ARKit直接適用 + lerp ---
-                        // eyeLook系はVRM標準のlookAt表情に変換
-                        const SKIP_SHAPES = new Set([
-                            'eyeBlinkLeft', 'eyeBlinkRight',
-                            'eyeLookDownLeft', 'eyeLookDownRight', 'eyeLookInLeft', 'eyeLookInRight',
-                            'eyeLookOutLeft', 'eyeLookOutRight', 'eyeLookUpLeft', 'eyeLookUpRight'
-                        ]);
-
-                        Object.keys(targetData.s).forEach(key => {
-                            const rawValue = targetData.s[key];
-                            let finalValue = rawValue;
-
-                            if (key === "eyeBlinkLeft" || key === "eyeBlinkRight") {
-                                const vrmKey = (key === "eyeBlinkLeft") ? "blinkLeft" : "blinkRight";
-                                finalValue = Math.min(1.0, rawValue * bSense);
-                                const current = exp.getValue(vrmKey) || 0;
-                                exp.setValue(vrmKey, current + (finalValue - current) * lerpSpeed);
-                            }
-                            else if (key === "jawOpen" || key === "aa") {
-                                const currentAa = exp.getValue("aa") || 0;
-                                exp.setValue("aa", currentAa + (finalValue - currentAa) * mouthSpeed);
-                                exp.setValue("jawOpen", currentAa + (finalValue - currentAa) * mouthSpeed);
-                            }
-                            else if (!SKIP_SHAPES.has(key)) {
-                                const currentVal = exp.getValue(key) || 0;
-                                exp.setValue(key, currentVal + (finalValue - currentVal) * lerpSpeed);
-                            }
-                        });
-                    } else {
-                        // --- PS非対応モデル: マッピング適用 + lerp ---
-                        const mapped = mapARKitToVRM(targetData.s, bSense);
-
-                        // 全VRM標準表情をリセット (前フレームの残りを消す)
-                        VRM_STANDARD_EXPRESSIONS.forEach(name => {
-                            const target = mapped[name] || 0;
-                            const current = exp.getValue(name) || 0;
-                            // 口パクは速いlerp、それ以外は通常lerp
-                            const speed = (name === 'aa' || name === 'ih' || name === 'ou' || name === 'ee' || name === 'oh') ? mouthSpeed : lerpSpeed;
-                            exp.setValue(name, current + (target - current) * speed);
-                        });
-                    }
-                }
-
-                // 目のボーン直接回転 (ARKit視線データ → ボーン回転 + lerp)
-                if (targetData.s) {
-                    const leftEye = currentVrm.humanoid.getNormalizedBoneNode("leftEye");
-                    const rightEye = currentVrm.humanoid.getNormalizedBoneNode("rightEye");
-                    if (leftEye && rightEye) {
-                        const s = targetData.s;
-                        const mp = 10 * Math.PI / 180;
-                        const my = 7 * Math.PI / 180;
-                        const tPL = ((s.eyeLookDownLeft || 0) - (s.eyeLookUpLeft || 0)) * mp;
-                        const tYL = ((s.eyeLookOutLeft || 0) - (s.eyeLookInLeft || 0)) * my;
-                        const tPR = ((s.eyeLookDownRight || 0) - (s.eyeLookUpRight || 0)) * mp;
-                        const tYR = ((s.eyeLookInRight || 0) - (s.eyeLookOutRight || 0)) * my;
-                        leftEye.rotation.x += (tPL - leftEye.rotation.x) * lerpSpeed;
-                        leftEye.rotation.y += (tYL - leftEye.rotation.y) * lerpSpeed;
-                        rightEye.rotation.x += (tPR - rightEye.rotation.x) * lerpSpeed;
-                        rightEye.rotation.y += (tYR - rightEye.rotation.y) * lerpSpeed;
-                    }
-                }
-
-                currentVrm.update(1.0 / 60.0);
+              const bL = Math.min(1.0, (shapes.eyeBlinkLeft || 0) * bSense);
+              const bR = Math.min(1.0, (shapes.eyeBlinkRight || 0) * bSense);
+              exp.setValue("blinkLeft", bL);
+              exp.setValue("blinkRight", bR);
+              exp.setValue("aa", mOpen);
+              vData.s = { eyeBlinkLeft: bL, eyeBlinkRight: bR, jawOpen: mOpen, aa: mOpen };
             }
-            renderer.render(scene, camera);
+
+            // 目のボーン直接回転 (ARKit視線データ → ボーン回転)
+            const leftEye = currentVrm.humanoid.getNormalizedBoneNode("leftEye");
+            const rightEye = currentVrm.humanoid.getNormalizedBoneNode("rightEye");
+            if (leftEye && rightEye) {
+              const mp = 10 * Math.PI / 180;
+              const my = 7 * Math.PI / 180;
+              leftEye.rotation.set(
+                ((shapes.eyeLookDownLeft || 0) - (shapes.eyeLookUpLeft || 0)) * mp,
+                ((shapes.eyeLookOutLeft || 0) - (shapes.eyeLookInLeft || 0)) * my, 0);
+              rightEye.rotation.set(
+                ((shapes.eyeLookDownRight || 0) - (shapes.eyeLookUpRight || 0)) * mp,
+                ((shapes.eyeLookInRight || 0) - (shapes.eyeLookOutRight || 0)) * my, 0);
+            }
+          }
+
+          if (result && result.facialTransformationMatrixes.length > 0) {
+            const rawRot = new THREE.Quaternion().setFromRotationMatrix(new THREE.Matrix4().fromArray(result.facialTransformationMatrixes[0].data));
+            if (shouldResetPose) { offsetRotation.copy(rawRot).invert(); shouldResetPose = false; }
+            let correctedRot = new THREE.Quaternion().multiplyQuaternions(offsetRotation, rawRot);
+            vData.r = [correctedRot.x, correctedRot.y, correctedRot.z, correctedRot.w];
+            const halfRot = new THREE.Quaternion().set(0, 0, 0, 1).slerp(correctedRot, 0.5);
+            const head = currentVrm.humanoid.getNormalizedBoneNode("head"), neck = currentVrm.humanoid.getNormalizedBoneNode("neck");
+            if (head && neck) { neck.quaternion.copy(halfRot); head.quaternion.copy(halfRot); }
+          }
         }
-        animate();
+        connections.forEach(conn => { if (conn.open) conn.send(vData); });
+      }
+      if (currentVrm) currentVrm.update(1.0 / 60.0);
+      renderer.render(scene, camera);
+    }
 
-        window.addEventListener('resize', () => {
-            camera.aspect = window.innerWidth / window.innerHeight;
-            camera.updateProjectionMatrix();
-            renderer.setSize(window.innerWidth, window.innerHeight);
-        });
-    </script>
+    const scene = new THREE.Scene();
+    const camera = new THREE.PerspectiveCamera(30, window.innerWidth / window.innerHeight, 0.1, 20.0);
+    camera.position.set(0, 1.4, 1.5);
+    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    document.body.appendChild(renderer.domElement);
+    scene.add(new THREE.DirectionalLight(0xffffff, Math.PI), new THREE.AmbientLight(0xffffff, 0.5));
 
+    window.addEventListener('resize', () => {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+
+    async function setupTracking() {
+      const fileset = await FilesetResolver.forVisionTasks("https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.3/wasm");
+      faceLandmarker = await FaceLandmarker.createFromOptions(fileset, {
+        baseOptions: { modelAssetPath: `https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task`, delegate: "GPU" },
+        outputFaceBlendshapes: true, outputFacialTransformationMatrixes: true, runningMode: "VIDEO"
+      });
+      animate();
+    }
+    setupTracking();
+  </script>
 </body>
 
 </html>
-
-</html>
-
