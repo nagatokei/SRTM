@@ -2,34 +2,74 @@
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
-    <title>README - SRTM</title>
-    <!-- index.htmlと同じCSSがあれば読み込む -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>README | SRTM WCFTs</title>
+    <!-- 元のサイトのCSSがあればここにリンク -->
     <link rel="stylesheet" href="style.css"> 
     <style>
-        body { background-color: #111; color: #eee; font-family: sans-serif; line-height: 1.6; padding: 40px; }
-        .container { max-width: 800px; margin: 0 auto; }
-        .back-link { display: inline-block; margin-bottom: 20px; color: #00aaff; text-decoration: none; }
-        code { background: #333; padding: 2px 5px; border-radius: 4px; }
+        /* Readme専用の追加スタイル */
+        body {
+            background-color: #0d0d0d; /* indexに合わせた暗い色 */
+            color: #e0e0e0;
+            font-family: 'Helvetica Neue', Arial, sans-serif;
+            line-height: 1.8;
+            margin: 0;
+            padding: 20px;
+        }
+        .readme-container {
+            max-width: 900px;
+            margin: 0 auto;
+            background: rgba(255, 255, 255, 0.03);
+            padding: 40px;
+            border-radius: 20px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        .back-button {
+            display: inline-block;
+            text-decoration: none;
+            color: #00aaff;
+            margin-bottom: 30px;
+            font-weight: bold;
+        }
+        h1 { border-bottom: 2px solid #00aaff; padding-bottom: 10px; color: #fff; }
+        h2 { margin-top: 40px; color: #00aaff; border-left: 4px solid #00aaff; padding-left: 15px; }
+        .faq-item { margin-bottom: 20px; padding: 15px; background: rgba(255,255,255,0.05); border-radius: 10px; }
+        .faq-q { font-weight: bold; color: #ffcc00; display: block; }
+        code { background: #333; padding: 2px 6px; border-radius: 4px; font-family: monospace; }
     </style>
 </head>
 <body>
-    <div class="container">
-        <a href="index.html" class="back-link">← ポータルに戻る</a>
-        
-        <h1>SRTM ユーザーマニュアル</h1>
-        <hr>
-        
-        <h2>概要</h2>
-        <p>ブラウザだけで完結する、VRM用ウェブカメラフェイストラッキングシステムです。</p>
 
-        <h2>動作環境</h2>
-        <ul>
-            <li>Google Chrome (推奨)</li>
-            <li>カメラデバイス</li>
-        </ul>
+<div class="readme-container">
+    <a href="index.html" class="back-button">← ポータルに戻る</a>
 
-        <!-- ここにREADMEの内容を書いていく -->
+    <h1>SRTM ユーザーガイド / README</h1>
+    <p>このページでは、SRTM（Webカメラフェイストラッキングシステム）の詳細な設定やトラブルシューティングについて解説します。</p>
 
+    <h2>⚙️ セットアップの詳細</h2>
+    <p>基本操作はポータル画面の通りですが、より安定させるためには以下の設定を推奨します。</p>
+    <ul>
+        <li><b>ブラウザのフォーカス:</b> 送信機側は常に小さなウィンドウで表示させておくと、OSによるスリープを防げます。</li>
+        <li><b>カメラ権限:</b> 起動時にカメラの使用を許可してください。</li>
+    </ul>
+
+    <h2>❓ よくある質問 (FAQ)</h2>
+    <div class="faq-item">
+        <span class="faq-q">Q. アバターが動きません。</span>
+        <p>A. 送信機(Transmitter)の画面でカメラ映像が動いているか確認してください。また、受信機(Receiver)側で正しいPeerIDが入力されているかチェックしてください。</p>
     </div>
+    <div class="faq-item">
+        <span class="faq-q">Q. 動作が非常に重いです。</span>
+        <p>A. ブラウザの「ハードウェアアクセラレーション」がオンになっているか確認してください（Chrome設定 ＞ システム）。</p>
+    </div>
+
+    <h2>🛠 トラブルシューティング</h2>
+    <p>もしドメイン関連でエラーが出る場合は、一度キャッシュをクリアするか、<code>nagatokei.github.io</code> がブロックされていないか確認してください。</p>
+
+    <footer style="margin-top: 50px; opacity: 0.5; font-size: 0.8em; text-align: center;">
+        © 2026 nagatokei - Produced for V-Tubers
+    </footer>
+</div>
+
 </body>
 </html>
