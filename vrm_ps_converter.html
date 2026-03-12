@@ -1,0 +1,545 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="utf-8">
+    <title>VRM Perfect Sync Converter</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            background: #0a0a0f;
+            color: #e0e0e0;
+            font-family: 'Segoe UI', sans-serif;
+            min-height: 100vh;
+        }
+
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 30px 20px;
+        }
+
+        h1 {
+            font-size: 22px;
+            color: #60a5fa;
+            margin-bottom: 5px;
+        }
+
+        .subtitle {
+            font-size: 12px;
+            color: #666;
+            margin-bottom: 25px;
+        }
+
+        .drop-zone {
+            border: 2px dashed #333;
+            border-radius: 12px;
+            padding: 50px;
+            text-align: center;
+            cursor: pointer;
+            transition: 0.3s;
+            background: #111118;
+            margin-bottom: 20px;
+        }
+
+        .drop-zone:hover,
+        .drop-zone.drag-over {
+            border-color: #60a5fa;
+            background: #151520;
+        }
+
+        .drop-zone input {
+            display: none;
+        }
+
+        .drop-zone .icon {
+            font-size: 40px;
+            margin-bottom: 10px;
+        }
+
+        .drop-zone .label {
+            font-size: 14px;
+            color: #888;
+        }
+
+        .section {
+            background: #111118;
+            border: 1px solid #222;
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 15px;
+        }
+
+        .log {
+            background: #0d0d14;
+            border-radius: 6px;
+            padding: 12px;
+            font-size: 11px;
+            font-family: Consolas, monospace;
+            max-height: 300px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+            line-height: 1.6;
+        }
+
+        .log .ok {
+            color: #4ade80;
+        }
+
+        .log .warn {
+            color: #fbbf24;
+        }
+
+        .log .err {
+            color: #f87171;
+        }
+
+        .log .info {
+            color: #60a5fa;
+        }
+
+        .btn-download {
+            display: none;
+            width: 100%;
+            padding: 14px;
+            background: #22c55e;
+            color: #fff;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+            margin-top: 15px;
+        }
+
+        .btn-download:hover {
+            background: #16a34a;
+        }
+
+        .progress {
+            width: 100%;
+            height: 8px;
+            background: #1a1a25;
+            border-radius: 4px;
+            margin: 10px 0;
+            overflow: hidden;
+            display: none;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: #60a5fa;
+            border-radius: 4px;
+            transition: width 0.2s;
+            width: 0%;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <h1>⚡ VRM Perfect Sync Converter</h1>
+        <div class="subtitle">VRoid Studio VRM 1.0 → パーフェクトシンク対応VRMに変換（ARKit 48ブレンドシェイプ自動生成）</div>
+
+        <div class="drop-zone" id="dropZone">
+            <div class="icon">📁</div>
+            <div class="label">VRMファイルをドラッグ＆ドロップ、またはクリックして選択</div>
+            <input type="file" id="fileInput" accept=".vrm">
+        </div>
+
+        <div class="progress" id="progressBar">
+            <div class="progress-fill" id="progressFill"></div>
+        </div>
+
+        <div class="section">
+            <div class="log" id="log">変換ログがここに表示されます...\n</div>
+        </div>
+
+        <button class="btn-download" id="btnDownload">📥 パーフェクトシンク対応VRMをダウンロード</button>
+    </div>
+
+    <script>
+        // ====== ARKit 48 Blendshape Mapping ======
+        const MAPPING = [
+            // Eyes: Blink (0.8 to prevent stacking with squint)
+            { a: 'eyeBlinkLeft', src: 'Fcl_EYE_Close_L', t: 'copy', s: 0.8 },
+            { a: 'eyeBlinkRight', src: 'Fcl_EYE_Close_R', t: 'copy', s: 0.8 },
+            // Eyes: Wide (0.5 - VRoid surprised is very strong)
+            { a: 'eyeWideLeft', src: 'Fcl_EYE_Surprised', t: 'splitL', s: 0.5 },
+            { a: 'eyeWideRight', src: 'Fcl_EYE_Surprised', t: 'splitR', s: 0.5 },
+            // Eyes: Squint (0.4 - prevent overlap with blink)
+            { a: 'eyeSquintLeft', src: 'Fcl_EYE_Joy_L', t: 'copy', s: 0.4 },
+            { a: 'eyeSquintRight', src: 'Fcl_EYE_Joy_R', t: 'copy', s: 0.4 },
+            // Eyes: Look (placeholder - VRM lookAt handles this)
+            { a: 'eyeLookUpLeft', src: null, t: 'zero' },
+            { a: 'eyeLookUpRight', src: null, t: 'zero' },
+            { a: 'eyeLookDownLeft', src: null, t: 'zero' },
+            { a: 'eyeLookDownRight', src: null, t: 'zero' },
+            { a: 'eyeLookInLeft', src: null, t: 'zero' },
+            { a: 'eyeLookInRight', src: null, t: 'zero' },
+            { a: 'eyeLookOutLeft', src: null, t: 'zero' },
+            { a: 'eyeLookOutRight', src: null, t: 'zero' },
+            // Jaw (0.7 - reduce vertical mouth movement)
+            { a: 'jawOpen', src: 'Fcl_MTH_A', t: 'copy', s: 0.7 },
+            { a: 'jawForward', src: 'Fcl_MTH_A', t: 'copy', s: 0.2 },
+            { a: 'jawLeft', src: 'Fcl_MTH_A', t: 'splitL', s: 0.15 },
+            { a: 'jawRight', src: 'Fcl_MTH_A', t: 'splitR', s: 0.15 },
+            // Mouth: Shape (0.7 for funnel/pucker to reduce overlap)
+            { a: 'mouthClose', src: 'Fcl_MTH_Close', t: 'copy', s: 0.8 },
+            { a: 'mouthFunnel', src: 'Fcl_MTH_O', t: 'copy', s: 0.7 },
+            { a: 'mouthPucker', src: 'Fcl_MTH_U', t: 'copy', s: 0.7 },
+            { a: 'mouthLeft', src: 'Fcl_MTH_Fun', t: 'splitL', s: 0.4 },
+            { a: 'mouthRight', src: 'Fcl_MTH_Fun', t: 'splitR', s: 0.4 },
+            // Mouth: Smile/Frown
+            { a: 'mouthSmileLeft', src: 'Fcl_MTH_Fun', t: 'splitL' },
+            { a: 'mouthSmileRight', src: 'Fcl_MTH_Fun', t: 'splitR' },
+            { a: 'mouthFrownLeft', src: 'Fcl_MTH_Sorrow', t: 'splitL' },
+            { a: 'mouthFrownRight', src: 'Fcl_MTH_Sorrow', t: 'splitR' },
+            // Mouth: Details
+            { a: 'mouthDimpleLeft', src: 'Fcl_MTH_Fun', t: 'splitL', s: 0.3 },
+            { a: 'mouthDimpleRight', src: 'Fcl_MTH_Fun', t: 'splitR', s: 0.3 },
+            { a: 'mouthStretchLeft', src: 'Fcl_MTH_Large', t: 'splitL', s: 0.6 },
+            { a: 'mouthStretchRight', src: 'Fcl_MTH_Large', t: 'splitR', s: 0.6 },
+            { a: 'mouthRollLower', src: 'Fcl_MTH_Close', t: 'copy', s: 0.4 },
+            { a: 'mouthRollUpper', src: 'Fcl_MTH_Close', t: 'copy', s: 0.4 },
+            { a: 'mouthShrugLower', src: 'Fcl_MTH_Down', t: 'copy', s: 0.5 },
+            { a: 'mouthShrugUpper', src: 'Fcl_MTH_Up', t: 'copy', s: 0.5 },
+            { a: 'mouthPressLeft', src: 'Fcl_MTH_Small', t: 'splitL', s: 0.6 },
+            { a: 'mouthPressRight', src: 'Fcl_MTH_Small', t: 'splitR', s: 0.6 },
+            // Nose
+            { a: 'noseSneerLeft', src: 'Fcl_MTH_Up', t: 'splitL', s: 0.4 },
+            { a: 'noseSneerRight', src: 'Fcl_MTH_Up', t: 'splitR', s: 0.4 },
+            // Cheek
+            { a: 'cheekPuff', src: null, t: 'cheekPuff' },
+            { a: 'cheekSquintLeft', src: 'Fcl_MTH_SkinFung_L', t: 'copy' },
+            { a: 'cheekSquintRight', src: 'Fcl_MTH_SkinFung_R', t: 'copy' },
+            // Brow
+            { a: 'browDownLeft', src: 'Fcl_BRW_Angry', t: 'splitL' },
+            { a: 'browDownRight', src: 'Fcl_BRW_Angry', t: 'splitR' },
+            { a: 'browInnerUp', src: 'Fcl_BRW_Sorrow', t: 'copy' },
+            { a: 'browOuterUpLeft', src: 'Fcl_BRW_Surprised', t: 'splitL' },
+            { a: 'browOuterUpRight', src: 'Fcl_BRW_Surprised', t: 'splitR' },
+            // Tongue
+            { a: 'tongueOut', src: null, t: 'zero' },
+        ];
+
+        const logEl = document.getElementById('log');
+        const progressBar = document.getElementById('progressBar');
+        const progressFill = document.getElementById('progressFill');
+        const btnDownload = document.getElementById('btnDownload');
+        let resultBlob = null;
+
+        function log(msg, cls = '') { logEl.innerHTML += cls ? `<span class="${cls}">${msg}</span>\n` : msg + '\n'; logEl.scrollTop = logEl.scrollHeight; }
+        function setProgress(p) { progressBar.style.display = 'block'; progressFill.style.width = p + '%'; }
+        function smoothstep(e0, e1, x) { const t = Math.max(0, Math.min(1, (x - e0) / (e1 - e0))); return t * t * (3 - 2 * t); }
+
+        // ====== Drop Zone ======
+        const dropZone = document.getElementById('dropZone');
+        const fileInput = document.getElementById('fileInput');
+        dropZone.addEventListener('click', () => fileInput.click());
+        dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('drag-over'); });
+        dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'));
+        dropZone.addEventListener('drop', e => { e.preventDefault(); dropZone.classList.remove('drag-over'); processFile(e.dataTransfer.files[0]); });
+        fileInput.addEventListener('change', e => { if (e.target.files[0]) processFile(e.target.files[0]); });
+
+        // ====== GLB Parser ======
+        function parseGLB(buf) {
+            const v = new DataView(buf);
+            if (v.getUint32(0, true) !== 0x46546C67) throw new Error('Not a valid GLB file');
+            const jsonLen = v.getUint32(12, true);
+            const json = JSON.parse(new TextDecoder().decode(new Uint8Array(buf, 20, jsonLen)));
+            const binStart = 20 + jsonLen + 8;
+            const binLen = v.getUint32(20 + jsonLen, true);
+            return { json, binStart, binLen, buf };
+        }
+
+        // ====== Read Float32 from bufferView ======
+        function readF32(buf, binStart, json, bvIdx) {
+            const bv = json.bufferViews[bvIdx];
+            const off = binStart + bv.byteOffset;
+            // Copy to aligned buffer to avoid alignment issues
+            const slice = buf.slice(off, off + bv.byteLength);
+            return new Float32Array(slice);
+        }
+
+        // ====== Get morph target index by name ======
+        function getMorphIndex(json, meshIdx, name) {
+            const mesh = json.meshes[meshIdx];
+            const names = mesh.primitives[0].extras.targetNames;
+            return names.indexOf(name);
+        }
+
+        // ====== Read morph target position deltas ======
+        function readMorphData(glb, meshIdx, morphIdx) {
+            const { json, binStart, buf } = glb;
+            const target = json.meshes[meshIdx].primitives[0].targets[morphIdx];
+            const posAccessor = json.accessors[target.POSITION];
+            return readF32(buf, binStart, json, posAccessor.bufferView);
+        }
+
+        // ====== Generate morph target data ======
+        function generateTarget(mapping, glb, meshIdx, vertexPositions, vtxCount) {
+            const { t, src, s } = mapping;
+            const scale = s || 1.0;
+
+            if (t === 'zero') return new Float32Array(vtxCount * 3);
+
+            if (t === 'cheekPuff') return genCheekPuff(vertexPositions, vtxCount);
+
+            const srcIdx = getMorphIndex(glb.json, meshIdx, src);
+            if (srcIdx < 0) { log(`  ⚠ ソース "${src}" が見つかりません`, 'warn'); return new Float32Array(vtxCount * 3); }
+            const srcData = readMorphData(glb, meshIdx, srcIdx);
+
+            if (t === 'copy') {
+                if (scale === 1.0) return new Float32Array(srcData);
+                const r = new Float32Array(srcData.length);
+                for (let i = 0; i < r.length; i++) r[i] = srcData[i] * scale;
+                return r;
+            }
+
+            if (t === 'splitL' || t === 'splitR') {
+                const r = new Float32Array(vtxCount * 3);
+                const fadeW = 0.008;
+                for (let i = 0; i < vtxCount; i++) {
+                    const x = vertexPositions[i * 3];
+                    // Character's left = -X, right = +X (glTF right-handed, +Z forward)
+                    const w = (t === 'splitL') ? smoothstep(fadeW, -fadeW, x) : smoothstep(-fadeW, fadeW, x);
+                    r[i * 3] = srcData[i * 3] * w * scale;
+                    r[i * 3 + 1] = srcData[i * 3 + 1] * w * scale;
+                    r[i * 3 + 2] = srcData[i * 3 + 2] * w * scale;
+                }
+                return r;
+            }
+
+            return new Float32Array(vtxCount * 3);
+        }
+
+        function genCheekPuff(pos, count) {
+            const r = new Float32Array(count * 3);
+            const cY = 1.18, rY = 0.04, minX = 0.02, maxX = 0.08, amt = 0.008;
+            for (let i = 0; i < count; i++) {
+                const x = pos[i * 3], y = pos[i * 3 + 1];
+                const ax = Math.abs(x);
+                const yD = Math.abs(y - cY) / rY;
+                const xF = smoothstep(minX, minX + 0.02, ax) * smoothstep(maxX + 0.02, maxX, ax);
+                const yF = Math.max(0, 1.0 - yD * yD);
+                const w = xF * yF;
+                r[i * 3] = Math.sign(x) * amt * w;
+                r[i * 3 + 2] = amt * 0.5 * w;
+            }
+            return r;
+        }
+
+        // ====== Compute accessor min/max ======
+        function computeMinMax(data, count) {
+            const min = [Infinity, Infinity, Infinity], max = [-Infinity, -Infinity, -Infinity];
+            for (let i = 0; i < count; i++) {
+                for (let c = 0; c < 3; c++) {
+                    const v = data[i * 3 + c];
+                    if (v < min[c]) min[c] = v;
+                    if (v > max[c]) max[c] = v;
+                }
+            }
+            return { min, max };
+        }
+
+        // ====== Main Processing ======
+        async function processFile(file) {
+            if (!file) return;
+            logEl.innerHTML = '';
+            btnDownload.style.display = 'none';
+            resultBlob = null;
+
+            try {
+                log('📂 ファイル読み込み中: ' + file.name, 'info');
+                setProgress(5);
+                const buf = await file.arrayBuffer();
+                const glb = parseGLB(buf);
+                const { json, binStart, binLen } = glb;
+                log('✓ GLB解析完了', 'ok');
+
+                // Verify VRM 1.0
+                if (!json.extensions || !json.extensions.VRMC_vrm) {
+                    log('✗ VRM 1.0 (VRMC_vrm) ではありません', 'err'); return;
+                }
+                log('✓ VRM 1.0 確認', 'ok');
+
+                // Find face mesh
+                const meshIdx = json.meshes.findIndex(m => m.primitives[0].extras && m.primitives[0].extras.targetNames);
+                if (meshIdx < 0) { log('✗ モーフターゲットを持つメッシュが見つかりません', 'err'); return; }
+                const mesh = json.meshes[meshIdx];
+                const existingNames = mesh.primitives[0].extras.targetNames;
+                log(`✓ Face mesh: "${mesh.name}" (${existingNames.length} morph targets)`, 'ok');
+                setProgress(10);
+
+                // Find node referencing this mesh
+                const faceNode = json.nodes.findIndex(n => n.mesh === meshIdx);
+                if (faceNode < 0) { log('✗ Face meshのノードが見つかりません', 'err'); return; }
+
+                // Read vertex positions
+                const posAccessorIdx = mesh.primitives[0].attributes.POSITION;
+                const posAccessor = json.accessors[posAccessorIdx];
+                const vtxCount = posAccessor.count;
+                const vtxPositions = readF32(buf, binStart, json, posAccessor.bufferView);
+                log(`✓ 頂点データ読み込み: ${vtxCount} vertices`, 'ok');
+
+                // Generate ARKit morph targets
+                log('\n🔄 ARKitブレンドシェイプ生成中...', 'info');
+                const newTargetsData = [];
+                const existingBin = new Uint8Array(buf, binStart, binLen);
+
+                for (let i = 0; i < MAPPING.length; i++) {
+                    const m = MAPPING[i];
+                    const data = generateTarget(m, glb, meshIdx, vtxPositions, vtxCount);
+                    newTargetsData.push({ name: m.a, data });
+                    const pct = 10 + Math.round((i / MAPPING.length) * 60);
+                    setProgress(pct);
+                    // Yield to UI
+                    if (i % 8 === 0) await new Promise(r => setTimeout(r, 0));
+                }
+                log(`✓ ${newTargetsData.length} ブレンドシェイプ生成完了`, 'ok');
+
+                // Build new binary buffer
+                log('\n📦 VRMファイル再構築中...', 'info');
+                setProgress(75);
+
+                const bytesPerTarget = vtxCount * 3 * 4; // Float32
+                // Create shared zero-normal buffer
+                const zeroNormals = new Float32Array(vtxCount * 3); // all zeros
+
+                // Calculate new binary size
+                const newBinSize = binLen + (newTargetsData.length * bytesPerTarget) + bytesPerTarget; // +1 for shared normals
+                const newBin = new Uint8Array(newBinSize);
+                newBin.set(existingBin, 0);
+                let writeOffset = binLen;
+
+                // Write shared zero-normal data
+                const normalBvOffset = writeOffset;
+                newBin.set(new Uint8Array(zeroNormals.buffer), writeOffset);
+                writeOffset += bytesPerTarget;
+
+                // Add shared normal bufferView
+                const normalBvIdx = json.bufferViews.length;
+                json.bufferViews.push({ buffer: 0, byteOffset: normalBvOffset, byteLength: bytesPerTarget, target: 34962 });
+
+                // Add shared normal accessor
+                const normalAccIdx = json.accessors.length;
+                json.accessors.push({
+                    bufferView: normalBvIdx, byteOffset: 0, type: 'VEC3', componentType: 5126,
+                    count: vtxCount, normalized: false
+                });
+
+                // Add each morph target
+                const newMorphStartIdx = existingNames.length;
+                const customExpressions = {};
+
+                for (let i = 0; i < newTargetsData.length; i++) {
+                    const { name, data } = newTargetsData[i];
+                    const { min, max } = computeMinMax(data, vtxCount);
+
+                    // Write position data
+                    const posBvOffset = writeOffset;
+                    newBin.set(new Uint8Array(data.buffer), writeOffset);
+                    writeOffset += bytesPerTarget;
+
+                    // Add position bufferView
+                    const posBvIdx = json.bufferViews.length;
+                    json.bufferViews.push({ buffer: 0, byteOffset: posBvOffset, byteLength: bytesPerTarget, target: 34962 });
+
+                    // Add position accessor
+                    const posAccIdx = json.accessors.length;
+                    json.accessors.push({
+                        bufferView: posBvIdx, byteOffset: 0, type: 'VEC3', componentType: 5126,
+                        count: vtxCount, max: [max[0], max[1], max[2]], min: [min[0], min[1], min[2]], normalized: false
+                    });
+
+                    // Add to all primitives
+                    const targetEntry = { POSITION: posAccIdx, NORMAL: normalAccIdx };
+                    for (const prim of mesh.primitives) {
+                        prim.targets.push(targetEntry);
+                        prim.extras.targetNames.push(name);
+                    }
+
+                    // Register as VRM custom expression
+                    customExpressions[name] = {
+                        morphTargetBinds: [{ node: faceNode, index: newMorphStartIdx + i, weight: 1.0 }],
+                        isBinary: false, overrideBlink: 'none', overrideLookAt: 'none', overrideMouth: 'none'
+                    };
+                }
+
+                // Update buffer size
+                json.buffers[0].byteLength = writeOffset;
+
+                // Add custom expressions to VRM
+                if (!json.extensions.VRMC_vrm.expressions) json.extensions.VRMC_vrm.expressions = {};
+                if (!json.extensions.VRMC_vrm.expressions.custom) json.extensions.VRMC_vrm.expressions.custom = {};
+                Object.assign(json.extensions.VRMC_vrm.expressions.custom, customExpressions);
+
+                log(`✓ ${Object.keys(customExpressions).length} カスタム表情を登録`, 'ok');
+                setProgress(85);
+
+                // Rebuild GLB
+                const usedBin = newBin.slice(0, writeOffset);
+                const jsonStr = JSON.stringify(json);
+                const jsonBytes = new TextEncoder().encode(jsonStr);
+                const jsonPadded = jsonBytes.length + ((4 - (jsonBytes.length % 4)) % 4);
+                const binPadded = usedBin.length + ((4 - (usedBin.length % 4)) % 4);
+                const totalSize = 12 + 8 + jsonPadded + 8 + binPadded;
+
+                const outBuf = new ArrayBuffer(totalSize);
+                const outView = new DataView(outBuf);
+                const outBytes = new Uint8Array(outBuf);
+
+                // GLB header
+                outView.setUint32(0, 0x46546C67, true); // glTF
+                outView.setUint32(4, 2, true);           // version
+                outView.setUint32(8, totalSize, true);
+
+                // JSON chunk
+                outView.setUint32(12, jsonPadded, true);
+                outView.setUint32(16, 0x4E4F534A, true); // JSON
+                outBytes.set(jsonBytes, 20);
+                for (let i = jsonBytes.length; i < jsonPadded; i++) outBytes[20 + i] = 0x20;
+
+                // BIN chunk
+                const binChunkOff = 20 + jsonPadded;
+                outView.setUint32(binChunkOff, binPadded, true);
+                outView.setUint32(binChunkOff + 4, 0x004E4942, true); // BIN
+                outBytes.set(usedBin, binChunkOff + 8);
+
+                setProgress(95);
+                resultBlob = new Blob([outBuf], { type: 'application/octet-stream' });
+                const origSize = (file.size / 1024 / 1024).toFixed(2);
+                const newSize = (outBuf.byteLength / 1024 / 1024).toFixed(2);
+
+                log(`\n✓ 変換完了！`, 'ok');
+                log(`  元サイズ: ${origSize} MB → 新サイズ: ${newSize} MB`, 'info');
+                log(`  追加モーフターゲット: ${newTargetsData.length}`, 'info');
+                log(`  合計モーフターゲット: ${existingNames.length}`, 'info');
+
+                setProgress(100);
+                btnDownload.style.display = 'block';
+                btnDownload.onclick = () => {
+                    const a = document.createElement('a');
+                    a.href = URL.createObjectURL(resultBlob);
+                    a.download = file.name.replace('.vrm', '_PerfectSync.vrm');
+                    a.click();
+                    URL.revokeObjectURL(a.href);
+                };
+
+                dropZone.querySelector('.label').innerText = '✅ 変換完了！別のファイルを変換するにはここをクリック';
+
+            } catch (e) {
+                console.error(e);
+                log(`\n✗ エラー: ${e.message}`, 'err');
+            }
+        }
+    </script>
+</body>
+
+</html>
