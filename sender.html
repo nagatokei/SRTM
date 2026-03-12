@@ -190,26 +190,6 @@
         style="display:none; font-size:12px; color:#ff4444; text-align:center; margin-top:8px; font-weight:bold; letter-spacing: 1px;">
         <span class="blink_dot">●</span> CAMERA ACTIVE
       </div>
-      <style>
-        .blink_dot {
-          animation: blink 1.2s infinite;
-          margin-right: 4px;
-        }
-
-        @keyframes blink {
-          0% {
-            opacity: 1;
-          }
-
-          50% {
-            opacity: 0.2;
-          }
-
-          100% {
-            opacity: 1;
-          }
-        }
-      </style>
 
       <div id="mic_bar_bg">
         <div id="mic_bar_fill"></div>
@@ -219,18 +199,18 @@
     <hr>
 
     <div class="control-group">
-      <label>姿勢制御</label>
-      <button id="btn_reset_pose" class="btn-secondary">正面リセット (顔の向きを直す)</button>
+      <label>姿勢・カメラ制御</label>
+      <button id="btn_reset_pose" class="btn-secondary">正面リセット (顔の向き)</button>
+      <button id="btn_reset_cam" class="btn-secondary">カメラ位置リセット</button>
+      <div style="display: flex; gap: 5px;">
+        <button id="btn_away" class="btn-secondary" style="flex: 1; background: #666;">離席</button>
+        <button id="btn_back" class="btn-secondary" style="flex: 1; background: #0078d4;">復帰</button>
+      </div>
     </div>
 
     <div class="control-group">
-      <label>高さ調整: <span class="val-disp" id="v_h">0.00</span></label>
-      <input type="range" id="s_h" min="-0.5" max="0.5" step="0.01" value="0.0">
-    </div>
-
-    <div class="control-group">
-      <label>キャラの大きさ: <span class="val-disp" id="v_scale">1.0</span></label>
-      <input type="range" id="s_scale" min="0.1" max="2.0" step="0.05" value="1.0">
+      <label>表示位置の調整: <span class="val-disp" id="v_cam_y">0.00</span></label>
+      <input type="range" id="s_cam_y" min="-1.0" max="1.0" step="0.01" value="0.0">
     </div>
 
     <div class="control-group">
@@ -272,6 +252,7 @@
   <script type="module">
     import * as THREE from 'three';
     import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+    import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
     import { VRMLoaderPlugin } from '@pixiv/three-vrm';
     import { FaceLandmarker, FilesetResolver } from '@mediapipe/tasks-vision';
 
@@ -282,13 +263,36 @@
     const psyncToggle = document.getElementById("psync_mode");
     const modelBadge = document.getElementById("model_type_badge");
 
-    const s_h = document.getElementById("s_h"), s_l = document.getElementById("s_l"), s_r = document.getElementById("s_r");
+    const s_cam_y = document.getElementById("s_cam_y");
+    const s_l = document.getElementById("s_l"), s_r = document.getElementById("s_r");
     const s_blink = document.getElementById("s_blink"), s_mic = document.getElementById("s_mic");
 
     let currentVrm, faceLandmarker, lastVideoTime = -1;
     let peer, connections = [], audioContext, analyser, dataArray, currentVolume = 0;
     let offsetRotation = new THREE.Quaternion(), shouldResetPose = false;
     let modelHasPS = false;
+    let controls;
+    let headWorldY = 1.2;
+    let targetCamYOffset = 0;
+    let currentCamYOffset = 0;
+
+    // --- ボタンイベントの登録（一回だけでOK） ---
+    document.getElementById("btn_reset_cam").onclick = () => {
+      s_cam_y.value = 0;
+      targetCamYOffset = 0;
+      currentCamYOffset = 0;
+      camera.position.set(0, headWorldY, 1.5); 
+      controls.target.set(0, headWorldY, 0);
+      controls.update();
+    };
+
+    document.getElementById("btn_away").onclick = () => {
+      targetCamYOffset = 2.0; 
+    };
+
+    document.getElementById("btn_back").onclick = () => {
+      targetCamYOffset = parseFloat(s_cam_y.value);
+    };
 
     // ====== パーフェクトシンク自動検出 ======
     function isPerfectSyncModel(vrm) {
@@ -300,60 +304,28 @@
     // ====== ARKit → VRM 標準表情マッピング ======
     const VRM_STANDARD_EXPRESSIONS = [
       'happy', 'angry', 'sad', 'relaxed', 'surprised',
-      'blinkLeft', 'blinkRight',
-      'aa', 'ih', 'ou', 'ee', 'oh',
+      'blinkLeft', 'blinkRight', 'aa', 'ih', 'ou', 'ee', 'oh',
       'lookUp', 'lookDown', 'lookLeft', 'lookRight'
     ];
 
     function mapARKitToVRM(shapes, blinkSensitivity) {
       const get = (name) => shapes[name] || 0;
       const mapped = {};
-
-      // まばたき
       mapped.blinkLeft = Math.min(1.0, get('eyeBlinkLeft') * blinkSensitivity);
       mapped.blinkRight = Math.min(1.0, get('eyeBlinkRight') * blinkSensitivity);
-
-      // 口形素
       const jawOpen = get('jawOpen');
-      const pucker = get('mouthPucker');
-      const funnel = get('mouthFunnel');
-      const smileL = get('mouthSmileLeft');
-      const smileR = get('mouthSmileRight');
-      const stretchL = get('mouthStretchLeft');
-      const stretchR = get('mouthStretchRight');
-      const stretch = (stretchL + stretchR) / 2;
+      const pucker = get('mouthPucker'), funnel = get('mouthFunnel');
+      const smileL = get('mouthSmileLeft'), smileR = get('mouthSmileRight');
+      const stretch = (get('mouthStretchLeft') + get('mouthStretchRight')) / 2;
       const smile = (smileL + smileR) / 2;
-
       mapped.aa = Math.min(1.0, jawOpen * Math.max(0.2, 1.0 - pucker - funnel));
       mapped.ih = Math.min(1.0, Math.max(stretch, smile * 0.5) * Math.max(0, 1.0 - jawOpen * 1.5) * 1.2);
       mapped.ou = Math.min(1.0, pucker);
       mapped.ee = Math.min(1.0, jawOpen * Math.max(stretch, smile * 0.3) * 2.0);
       mapped.oh = Math.min(1.0, funnel);
-
-      // 感情 (上限0.5)
-      const frown = (get('mouthFrownLeft') + get('mouthFrownRight')) / 2;
-      const eyeWide = (get('eyeWideLeft') + get('eyeWideRight')) / 2;
-      const browDown = (get('browDownLeft') + get('browDownRight')) / 2;
-      const browUp = (get('browInnerUp') + get('browOuterUpLeft') + get('browOuterUpRight')) / 3;
-
       mapped.happy = Math.min(0.5, Math.max(0, smile - 0.25) * 0.8);
-      mapped.angry = Math.min(0.5, Math.max(0, (frown * 0.6 + browDown * 0.4) - 0.2) * 1.0);
-      mapped.surprised = Math.min(0.5, Math.max(0, (eyeWide * 0.5 + browUp * 0.5) - 0.15) * 1.0);
-
-      const eSum = mapped.happy + mapped.angry + mapped.surprised;
-      if (eSum > 0.6) {
-        const s = 0.6 / eSum;
-        mapped.happy *= s;
-        mapped.angry *= s;
-        mapped.surprised *= s;
-      }
-
-      // 視線
-      mapped.lookUp = (get('eyeLookUpLeft') + get('eyeLookUpRight')) / 2;
-      mapped.lookDown = (get('eyeLookDownLeft') + get('eyeLookDownRight')) / 2;
-      mapped.lookLeft = (get('eyeLookInLeft') + get('eyeLookOutRight')) / 2;
-      mapped.lookRight = (get('eyeLookOutLeft') + get('eyeLookInRight')) / 2;
-
+      mapped.angry = Math.min(0.5, Math.max(0, (get('mouthFrownLeft') * 0.6 + get('browDownLeft') * 0.4) - 0.2));
+      mapped.surprised = Math.min(0.5, Math.max(0, (get('eyeWideLeft') * 0.5 + get('browInnerUp') * 0.5) - 0.15));
       return mapped;
     }
 
@@ -394,16 +366,21 @@
         scene.add(gltf.scene);
         currentVrm.scene.scale.set(-1, 1, 1);
 
-        modelHasPS = isPerfectSyncModel(currentVrm);
-        modelBadge.style.display = "block";
-        if (modelHasPS) {
-          modelBadge.innerText = "PS対応";
-          modelBadge.className = "badge-ps";
-        } else {
-          modelBadge.innerText = "自動マッピング";
-          modelBadge.className = "badge-mapped";
+        const head = currentVrm.humanoid.getNormalizedBoneNode("head");
+        if (head) {
+          const worldPos = new THREE.Vector3();
+          head.getWorldPosition(worldPos);
+          headWorldY = worldPos.y;
+          targetCamYOffset = parseFloat(s_cam_y.value);
+          currentCamYOffset = targetCamYOffset;
+          controls.target.set(0, headWorldY + targetCamYOffset, 0);
+          controls.update();
         }
 
+        modelHasPS = isPerfectSyncModel(currentVrm);
+        modelBadge.style.display = "block";
+        modelBadge.innerText = modelHasPS ? "PS対応" : "自動マッピング";
+        modelBadge.className = modelHasPS ? "badge-ps" : "badge-mapped";
         connStatus.innerText = "VRM準備OK";
         connStatus.style.color = "#00ff00";
       });
@@ -436,6 +413,21 @@
 
     function animate() {
       requestAnimationFrame(animate);
+      if (controls) {
+        const sliderVal = parseFloat(s_cam_y.value);
+        document.getElementById("v_cam_y").innerText = sliderVal.toFixed(2);
+
+        // スライダーを手動で動かしている間は、離席中(2.0)でなければ目標値を同期
+        if (targetCamYOffset !== 2.0) {
+          targetCamYOffset = sliderVal;
+        }
+
+        // 滑らかに移動(Lerp)
+        currentCamYOffset += (targetCamYOffset - currentCamYOffset) * 0.1;
+        controls.target.y = headWorldY + currentCamYOffset;
+        controls.update();
+      }
+      
       if (analyser) {
         analyser.getByteFrequencyData(dataArray);
         currentVolume = (dataArray.reduce((a, b) => a + b, 0) / dataArray.length) / 128.0;
@@ -446,30 +438,23 @@
         lastVideoTime = video.currentTime;
         const result = faceLandmarker ? faceLandmarker.detectForVideo(video, performance.now()) : null;
 
-        const h = parseFloat(s_h.value), l = parseFloat(s_l.value), r = parseFloat(s_r.value);
+        const l = parseFloat(s_l.value), r = parseFloat(s_r.value);
         const bSense = parseFloat(s_blink.value), mSense = parseFloat(s_mic.value);
-        const scaleVal = parseFloat(document.getElementById("s_scale").value);
-
-        document.getElementById("v_h").innerText = h.toFixed(2);
         document.getElementById("v_l").innerText = l;
         document.getElementById("v_r").innerText = r;
         document.getElementById("v_blink").innerText = bSense;
         document.getElementById("v_mic").innerText = mSense;
-        document.getElementById("v_scale").innerText = scaleVal.toFixed(2);
 
         const isPSync = psyncToggle.checked;
-        const vData = { h, la: l, ra: r, b: bSense, s: {}, r: null, s_scale: scaleVal };
+        const vData = { h: 0, la: l, ra: r, b: bSense, s: {}, r: null, s_scale: 1.0 };
 
         if (currentVrm) {
-          currentVrm.scene.scale.set(-scaleVal, scaleVal, scaleVal);
-          currentVrm.scene.position.y = h;
           const armL = currentVrm.humanoid.getNormalizedBoneNode("leftUpperArm");
           const armR = currentVrm.humanoid.getNormalizedBoneNode("rightUpperArm");
           if (armL) armL.rotation.z = THREE.MathUtils.degToRad(l);
           if (armR) armR.rotation.z = THREE.MathUtils.degToRad(-r);
 
           const exp = currentVrm.expressionManager;
-
           if (result && result.faceBlendshapes.length > 0) {
             const categories = result.faceBlendshapes[0].categories;
             const shapes = {};
@@ -477,61 +462,35 @@
             const mOpen = Math.max(shapes.jawOpen || 0, currentVolume * mSense);
 
             if (isPSync) {
-              // 拡張表情モード: 全表情リセット
               VRM_STANDARD_EXPRESSIONS.forEach(name => exp.setValue(name, 0));
               categories.forEach(c => exp.setValue(c.categoryName, 0));
-
-              // eyeLook系はARKit custom expressionとしてではなく、VRM標準のlookAt表情に変換
-              const SKIP_SHAPES = new Set([
-                'eyeBlinkLeft', 'eyeBlinkRight',
-                'eyeLookDownLeft', 'eyeLookDownRight', 'eyeLookInLeft', 'eyeLookInRight',
-                'eyeLookOutLeft', 'eyeLookOutRight', 'eyeLookUpLeft', 'eyeLookUpRight'
-              ]);
-
               if (modelHasPS) {
-                // PS対応モデル: ARKit直接適用 (eyeLook→VRM lookAt変換)
-                categories.forEach(c => {
-                  if (!SKIP_SHAPES.has(c.categoryName)) {
-                    exp.setValue(c.categoryName, c.score);
-                  }
-                });
+                const SKIP = new Set(['eyeBlinkLeft', 'eyeBlinkRight', 'eyeLookDownLeft', 'eyeLookDownRight', 'eyeLookInLeft', 'eyeLookInRight', 'eyeLookOutLeft', 'eyeLookOutRight', 'eyeLookUpLeft', 'eyeLookUpRight']);
+                categories.forEach(c => { if (!SKIP.has(c.categoryName)) exp.setValue(c.categoryName, c.score); });
                 exp.setValue("blinkLeft", Math.min(1.0, (shapes.eyeBlinkLeft || 0) * bSense));
                 exp.setValue("blinkRight", Math.min(1.0, (shapes.eyeBlinkRight || 0) * bSense));
                 exp.setValue("aa", mOpen);
                 exp.setValue("jawOpen", mOpen);
               } else {
-                // PS非対応モデル: マッピング適用
-                const shapesWithMic = { ...shapes, jawOpen: mOpen };
-                const mapped = mapARKitToVRM(shapesWithMic, bSense);
-                Object.keys(mapped).forEach(key => exp.setValue(key, mapped[key]));
+                const mapped = mapARKitToVRM({ ...shapes, jawOpen: mOpen }, bSense);
+                Object.keys(mapped).forEach(k => exp.setValue(k, mapped[k]));
               }
-
               vData.s = { ...shapes, jawOpen: mOpen };
             } else {
-              // 基本モード: まばたき＋口パクのみ
-              VRM_STANDARD_EXPRESSIONS.forEach(name => exp.setValue(name, 0));
-              categories.forEach(c => exp.setValue(c.categoryName, 0));
-
+              VRM_STANDARD_EXPRESSIONS.forEach(n => exp.setValue(n, 0));
               const bL = Math.min(1.0, (shapes.eyeBlinkLeft || 0) * bSense);
               const bR = Math.min(1.0, (shapes.eyeBlinkRight || 0) * bSense);
-              exp.setValue("blinkLeft", bL);
-              exp.setValue("blinkRight", bR);
+              exp.setValue("blinkLeft", bL); exp.setValue("blinkRight", bR);
               exp.setValue("aa", mOpen);
               vData.s = { eyeBlinkLeft: bL, eyeBlinkRight: bR, jawOpen: mOpen, aa: mOpen };
             }
 
-            // 目のボーン直接回転 (ARKit視線データ → ボーン回転)
             const leftEye = currentVrm.humanoid.getNormalizedBoneNode("leftEye");
             const rightEye = currentVrm.humanoid.getNormalizedBoneNode("rightEye");
             if (leftEye && rightEye) {
-              const mp = 10 * Math.PI / 180;
-              const my = 7 * Math.PI / 180;
-              leftEye.rotation.set(
-                ((shapes.eyeLookDownLeft || 0) - (shapes.eyeLookUpLeft || 0)) * mp,
-                ((shapes.eyeLookOutLeft || 0) - (shapes.eyeLookInLeft || 0)) * my, 0);
-              rightEye.rotation.set(
-                ((shapes.eyeLookDownRight || 0) - (shapes.eyeLookUpRight || 0)) * mp,
-                ((shapes.eyeLookInRight || 0) - (shapes.eyeLookOutRight || 0)) * my, 0);
+              const mp = 10 * Math.PI / 180, my = 7 * Math.PI / 180;
+              leftEye.rotation.set(((shapes.eyeLookDownLeft || 0) - (shapes.eyeLookUpLeft || 0)) * mp, ((shapes.eyeLookOutLeft || 0) - (shapes.eyeLookInLeft || 0)) * my, 0);
+              rightEye.rotation.set(((shapes.eyeLookDownRight || 0) - (shapes.eyeLookUpRight || 0)) * mp, ((shapes.eyeLookInRight || 0) - (shapes.eyeLookOutRight || 0)) * my, 0);
             }
           }
 
@@ -545,6 +504,9 @@
             if (head && neck) { neck.quaternion.copy(halfRot); head.quaternion.copy(halfRot); }
           }
         }
+        vData.camPos = [camera.position.x, camera.position.y, camera.position.z];
+        vData.camTarget = [controls.target.x, controls.target.y, controls.target.z];
+        
         connections.forEach(conn => { if (conn.open) conn.send(vData); });
       }
       if (currentVrm) currentVrm.update(1.0 / 60.0);
@@ -553,11 +515,24 @@
 
     const scene = new THREE.Scene();
     const camera = new THREE.PerspectiveCamera(30, window.innerWidth / window.innerHeight, 0.1, 20.0);
-    camera.position.set(0, 1.4, 1.5);
+    camera.position.set(0, 1.2, 1.5);
+    scene.add(camera);
+
     const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
     renderer.setSize(window.innerWidth, window.innerHeight);
     document.body.appendChild(renderer.domElement);
-    scene.add(new THREE.DirectionalLight(0xffffff, Math.PI), new THREE.AmbientLight(0xffffff, 0.5));
+
+    const camLight = new THREE.DirectionalLight(0xffffff, Math.PI);
+    camLight.position.set(0, 0, 1);
+    camera.add(camLight);
+    scene.add(new THREE.AmbientLight(0xffffff, 0.5));
+
+    controls = new OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    controls.enablePan = false; 
+    controls.minDistance = 0.5;  
+    controls.maxDistance = 5.0;     
+    controls.target.set(0, 1.2, 0);
 
     window.addEventListener('resize', () => {
       camera.aspect = window.innerWidth / window.innerHeight;
@@ -578,5 +553,3 @@
 </body>
 
 </html>
-
-
