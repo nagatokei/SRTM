@@ -75,24 +75,14 @@
       background: #444;
       font-size: 11px;
       margin-top: 5px;
-      transition: background 0.2s; /* 色の変化を滑らかにする */
+      transition: background 0.2s;
     }
 
-    /* 離席ボタン：普段は暗め、ホバーで少し明るいグレー */
-    #btn_away {
-        background: #444; /* 他のサブボタンと同じ色に合わせる */
-    }
-    #btn_away:hover {
-        background: #666; 
-    }
+    /* 離席ボタン：ホバーでグレー */
+    #btn_away:hover { background: #666; }
 
-    /* 復帰ボタン：普段は暗め、ホバーで青色 */
-    #btn_back {
-        background: #444; 
-    }
-    #btn_back:hover {
-        background: #0078d4; 
-    }
+    /* 復帰ボタン：ホバーで青 */
+    #btn_back:hover { background: #0078d4; }
 
     #mic_bar_bg {
       width: 100%;
@@ -161,15 +151,8 @@
       text-align: center;
     }
 
-    .badge-ps {
-      background: #28a745;
-      color: #fff;
-    }
-
-    .badge-mapped {
-      background: #ffc107;
-      color: #000;
-    }
+    .badge-ps { background: #28a745; color: #fff; }
+    .badge-mapped { background: #ffc107; color: #000; }
   </style>
   <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
 </head>
@@ -220,8 +203,8 @@
       <button id="btn_reset_pose" class="btn-secondary">正面リセット (顔の向き)</button>
       <button id="btn_reset_cam" class="btn-secondary">カメラ位置リセット</button>
       <div style="display: flex; gap: 5px;">
-        <button id="btn_away" class="btn-secondary" style="flex: 1; background: #666;">離席</button>
-        <button id="btn_back" class="btn-secondary" style="flex: 1; background: #0078d4;">復帰</button>
+        <button id="btn_away" class="btn-secondary" style="flex: 1;">離席</button>
+        <button id="btn_back" class="btn-secondary" style="flex: 1;">復帰</button>
       </div>
     </div>
 
@@ -293,7 +276,7 @@
     let targetCamYOffset = 0;
     let currentCamYOffset = 0;
 
-    // --- ボタンイベントの登録（一回だけでOK） ---
+    // --- ボタンイベントの登録 ---
     document.getElementById("btn_reset_cam").onclick = () => {
       s_cam_y.value = 0;
       targetCamYOffset = 0;
@@ -311,19 +294,13 @@
       targetCamYOffset = parseFloat(s_cam_y.value);
     };
 
-    // ====== パーフェクトシンク自動検出 ======
     function isPerfectSyncModel(vrm) {
       if (!vrm || !vrm.expressionManager) return false;
       const testNames = ['browDownLeft', 'cheekPuff', 'noseSneerLeft'];
       return testNames.some(name => vrm.expressionManager.getExpression(name) != null);
     }
 
-    // ====== ARKit → VRM 標準表情マッピング ======
-    const VRM_STANDARD_EXPRESSIONS = [
-      'happy', 'angry', 'sad', 'relaxed', 'surprised',
-      'blinkLeft', 'blinkRight', 'aa', 'ih', 'ou', 'ee', 'oh',
-      'lookUp', 'lookDown', 'lookLeft', 'lookRight'
-    ];
+    const VRM_STANDARD_EXPRESSIONS = ['happy', 'angry', 'sad', 'relaxed', 'surprised', 'blinkLeft', 'blinkRight', 'aa', 'ih', 'ou', 'ee', 'oh', 'lookUp', 'lookDown', 'lookLeft', 'lookRight'];
 
     function mapARKitToVRM(shapes, blinkSensitivity) {
       const get = (name) => shapes[name] || 0;
@@ -332,9 +309,8 @@
       mapped.blinkRight = Math.min(1.0, get('eyeBlinkRight') * blinkSensitivity);
       const jawOpen = get('jawOpen');
       const pucker = get('mouthPucker'), funnel = get('mouthFunnel');
-      const smileL = get('mouthSmileLeft'), smileR = get('mouthSmileRight');
       const stretch = (get('mouthStretchLeft') + get('mouthStretchRight')) / 2;
-      const smile = (smileL + smileR) / 2;
+      const smile = (get('mouthSmileLeft') + get('mouthSmileRight')) / 2;
       mapped.aa = Math.min(1.0, jawOpen * Math.max(0.2, 1.0 - pucker - funnel));
       mapped.ih = Math.min(1.0, Math.max(stretch, smile * 0.5) * Math.max(0, 1.0 - jawOpen * 1.5) * 1.2);
       mapped.ou = Math.min(1.0, pucker);
@@ -382,7 +358,6 @@
         currentVrm = gltf.userData.vrm;
         scene.add(gltf.scene);
         currentVrm.scene.scale.set(-1, 1, 1);
-
         const head = currentVrm.humanoid.getNormalizedBoneNode("head");
         if (head) {
           const worldPos = new THREE.Vector3();
@@ -393,7 +368,6 @@
           controls.target.set(0, headWorldY + targetCamYOffset, 0);
           controls.update();
         }
-
         modelHasPS = isPerfectSyncModel(currentVrm);
         modelBadge.style.display = "block";
         modelBadge.innerText = modelHasPS ? "PS対応" : "自動マッピング";
@@ -433,8 +407,8 @@
       if (controls) {
         const sliderVal = parseFloat(s_cam_y.value);
         document.getElementById("v_cam_y").innerText = sliderVal.toFixed(2);
-
-        // スライダーを手動で動かしている間は、離席中(2.0)でなければ目標値を同期
+        
+        // スライダーを手動で動かしている間は目標値を同期（離席中以外）
         if (targetCamYOffset !== 2.0) {
           targetCamYOffset = sliderVal;
         }
@@ -480,7 +454,6 @@
 
             if (isPSync) {
               VRM_STANDARD_EXPRESSIONS.forEach(name => exp.setValue(name, 0));
-              categories.forEach(c => exp.setValue(c.categoryName, 0));
               if (modelHasPS) {
                 const SKIP = new Set(['eyeBlinkLeft', 'eyeBlinkRight', 'eyeLookDownLeft', 'eyeLookDownRight', 'eyeLookInLeft', 'eyeLookInRight', 'eyeLookOutLeft', 'eyeLookOutRight', 'eyeLookUpLeft', 'eyeLookUpRight']);
                 categories.forEach(c => { if (!SKIP.has(c.categoryName)) exp.setValue(c.categoryName, c.score); });
@@ -501,14 +474,6 @@
               exp.setValue("aa", mOpen);
               vData.s = { eyeBlinkLeft: bL, eyeBlinkRight: bR, jawOpen: mOpen, aa: mOpen };
             }
-
-            const leftEye = currentVrm.humanoid.getNormalizedBoneNode("leftEye");
-            const rightEye = currentVrm.humanoid.getNormalizedBoneNode("rightEye");
-            if (leftEye && rightEye) {
-              const mp = 10 * Math.PI / 180, my = 7 * Math.PI / 180;
-              leftEye.rotation.set(((shapes.eyeLookDownLeft || 0) - (shapes.eyeLookUpLeft || 0)) * mp, ((shapes.eyeLookOutLeft || 0) - (shapes.eyeLookInLeft || 0)) * my, 0);
-              rightEye.rotation.set(((shapes.eyeLookDownRight || 0) - (shapes.eyeLookUpRight || 0)) * mp, ((shapes.eyeLookInRight || 0) - (shapes.eyeLookOutRight || 0)) * my, 0);
-            }
           }
 
           if (result && result.facialTransformationMatrixes.length > 0) {
@@ -521,6 +486,8 @@
             if (head && neck) { neck.quaternion.copy(halfRot); head.quaternion.copy(halfRot); }
           }
         }
+        
+        // カメラ座標とターゲットを送る
         vData.camPos = [camera.position.x, camera.position.y, camera.position.z];
         vData.camTarget = [controls.target.x, controls.target.y, controls.target.z];
         
