@@ -438,6 +438,18 @@
             camera.updateProjectionMatrix();
             renderer.setSize(window.innerWidth, window.innerHeight);
         });
+        window.addEventListener('load', () => {
+            if (vrmToLoad) {
+                console.log("URLから読み込みを開始します:", vrmToLoad);
+                loadVRM(vrmToLoad);
+            } else {
+                statusEl.innerText = "Please select VRM file";
+            }
+        });
+
+        // アニメーションループを開始
+        animate();
+
     </script>
 </body>
 </html>
