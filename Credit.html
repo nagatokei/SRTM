@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Technical Credits & Licenses</title>
+    <style>
+        body {
+            background-color: #0f0f0f;
+            color: #ddd;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            padding: 40px;
+            max-width: 800px;
+            margin: auto;
+        }
+        h1 { color: #0078d4; border-bottom: 2px solid #333; padding-bottom: 10px; }
+        h2 { color: #eee; margin-top: 30px; font-size: 1.2em; }
+        a { color: #0078d4; text-decoration: none; }
+        a:hover { text-decoration: underline; }
+        .license-card {
+            background: #1a1a1a;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 15px;
+            border: 1px solid #333;
+        }
+        .dev-info { color: #888; font-size: 0.9em; margin-top: 50px; text-align: center; border-top: 1px solid #333; padding-top: 20px; }
+    </style>
+</head>
+<body>
+    <h1>Technical Credits & Licenses</h1>
+    <p>This application is powered by the following incredible open-source technologies.</p>
+
+    <h2>Core Engines</h2>
+    <div class="license-card">
+        <b><a href="https://threejs.org/" target="_blank">Three.js</a></b> (MIT License)<br>
+        The gold standard for 3D rendering on the web.
+    </div>
+    <div class="license-card">
+        <b><a href="https://github.com/vrm-c/three-vrm" target="_blank">@pixiv/three-vrm</a></b> (MIT License)<br>
+        Used for VRM 0.x / 1.0 model loading and humanoid/expression control.
+    </div>
+
+    <h2>AI & Motion Tracking</h2>
+    <div class="license-card">
+        <b><a href="https://developers.google.com/mediapipe" target="_blank">MediaPipe Tasks Vision</a></b> (Apache 2.0 License)<br>
+        Providing state-of-the-art face landmark detection and blendshape estimation.
+    </div>
+    <div class="license-card">
+        <b>ARKit Blendshape Standards</b><br>
+        Referenced for 52-shape face tracking compatibility (Perfect Sync).
+    </div>
+
+    <h2>Real-time Communication</h2>
+    <div class="license-card">
+        <b><a href="https://peerjs.com/" target="_blank">PeerJS</a></b> (MIT License)<br>
+        Facilitating low-latency WebRTC P2P data transfer between Sender and Receiver.
+    </div>
+
+    <div class="dev-info">
+        Developed by [すらたま/kei_nagato]<br>
+        Application Version: 1.0.0 (Dual Mode Support)
+    </div>
+</body>
+</html>
