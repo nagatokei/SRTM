@@ -78,11 +78,9 @@
       transition: background 0.2s;
     }
 
-    /* 離席ボタン：ホバーでグレー */
-    #btn_away:hover { background: #666; }
+        #btn_away:hover { background: #666; }
 
-    /* 復帰ボタン：ホバーで青 */
-    #btn_back:hover { background: #0078d4; }
+        #btn_back:hover { background: #0078d4; }
 
     #mic_bar_bg {
       width: 100%;
@@ -413,7 +411,7 @@
           targetCamYOffset = sliderVal;
         }
 
-        // 滑らかに移動(Lerp)
+        
         currentCamYOffset += (targetCamYOffset - currentCamYOffset) * 0.1;
         controls.target.y = headWorldY + currentCamYOffset;
         controls.update();
@@ -487,7 +485,7 @@
           }
         }
         
-        // カメラ座標とターゲットを送る
+        
         vData.camPos = [camera.position.x, camera.position.y, camera.position.z];
         vData.camTarget = [controls.target.x, controls.target.y, controls.target.z];
         
