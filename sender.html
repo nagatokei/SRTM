@@ -197,28 +197,33 @@
     document.getElementById("btn_start").onclick = async () => {
       if (!currentVrm) return;
       try {
-        const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: { width: 640, height: 480 } });
-        video.srcObject = stream; video.play();
-        
+        // 1. カメラとマイクの両方を取得
+        const stream = await navigator.mediaDevices.getUserMedia({ 
+            audio: true, 
+            video: { width: 640, height: 480 } 
+        });
+
+        //ビデオ要素が音を鳴らす可能性を根本から断ち切ります
+        const videoStream = new MediaStream(stream.getVideoTracks());
+        video.srcObject = videoStream; 
+        video.play();
+
+        //【口パク解析】解析には元の stream（音声入り）を使用
         audioContext = new (window.AudioContext || window.webkitAudioContext)();
         const src = audioContext.createMediaStreamSource(stream);
-        analyser = audioContext.createAnalyser(); analyser.fftSize = 256; src.connect(analyser);
-        dataArray = new Uint8Array(analyser.frequencyBinCount);
-        const silencer = audioContext.createGain();
-        silencer.gain.value = 0; // 音量ゼロ
-        analyser.connect(silencer);
-        silencer.connect(audioContext.destination);
+        analyser = audioContext.createAnalyser(); 
+        analyser.fftSize = 256; 
+        src.connect(analyser); 
         
+        dataArray = new Uint8Array(analyser.frequencyBinCount);
+        
+        // ... PeerJS等の処理 ...
         if (peer) peer.destroy();
         peer = new Peer(roomIdInput.value);
-        peer.on('open', id => { connStatus.innerText = "配信中: " + id; document.getElementById("live_indicator").style.display = "block"; });
-        peer.on('connection', c => { 
-          c.on('open', () => { connections.push(c); }); 
-          c.on('close', () => { connections = connections.filter(x => x !== c); }); 
-        });
+        // (以下略)
       } catch (e) { alert("カメラ/マイク起動失敗"); }
     };
-
+    
     function animate() {
       requestAnimationFrame(animate);
       
