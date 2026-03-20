@@ -2,7 +2,7 @@
 <html>
 <head>
   <meta charset="utf-8">
-  <title>VRM Sender (Stealth Orbit Optimized)</title>
+  <title>VRM Sender (OrbitControls Optimized)</title>
   <style>
     body { margin: 0; background: #000; color: white; font-family: sans-serif; overflow: hidden; }
     #ui_panel { position: absolute; top: 10px; left: 10px; background: rgba(0, 0, 0, 0.85); padding: 15px; z-index: 10; border-radius: 8px; border: 1px solid #555; width: 280px; max-height: 90vh; overflow-y: auto; }
@@ -17,6 +17,8 @@
     #btn_back:hover { background: #0078d4; }
     #mic_bar_bg { width: 100%; height: 6px; background: #333; border-radius: 3px; margin-top: 5px; overflow: hidden; }
     #mic_bar_fill { width: 0%; height: 100%; background: #00ff00; }
+    #video_ui { position: absolute; bottom: 10px; right: 10px; width: 160px; opacity: 0.5; z-index: 5; }
+    video { width: 100%; transform: scaleX(-1); border-radius: 4px; border: 1px solid #444; }
     #conn_status { font-size: 12px; color: #ffcc00; margin-top: 10px; font-weight: bold; text-align: center; }
     hr { border: 0; border-top: 1px solid #444; margin: 15px 0; }
     .val-disp { float: right; color: #fff; font-weight: bold; }
@@ -32,7 +34,7 @@
 <body>
 
   <div id="ui_panel">
-    <b style="font-size: 14px;">VRM Sender (Stealth Orbit)</b>
+    <b style="font-size: 14px;">VRM Sender (Orbit Optimized)</b>
     <div id="model_type_badge"></div>
     <div class="control-group" style="margin-top:15px;"><label>1. VRMファイルを選択:</label><input type="file" id="vrm_file" accept=".vrm"></div>
     <div class="mode-switch"><label style="cursor: pointer;"><input type="checkbox" id="psync_mode" checked> 拡張表情モード</label></div>
@@ -58,6 +60,8 @@
     <div class="control-group"><label>マイク感度: <span class="val-disp" id="v_mic">2.5</span></label><input type="range" id="s_mic" min="0.5" max="10.0" step="0.1" value="2.5"></div>
   </div>
 
+  <div id="video_ui" style="display: none;"><video id="input_video" autoplay playsinline muted></video></div>
+
   <script type="importmap">
     { "imports": {
         "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
@@ -74,20 +78,10 @@
     import { VRMLoaderPlugin } from '@pixiv/three-vrm';
     import { FaceLandmarker, FilesetResolver } from '@mediapipe/tasks-vision';
 
-    // --- メモリ上に不可視のvideo要素を生成 (Zero-new) ---
-    const video = document.createElement("video");
-    video.setAttribute("autoplay", "");
-    video.setAttribute("playsinline", "");
-    video.setAttribute("muted", "");
-
-    const connStatus = document.getElementById("conn_status");
-    const micBarFill = document.getElementById("mic_bar_fill");
-    const roomIdInput = document.getElementById("room_id");
-    const psyncToggle = document.getElementById("psync_mode");
-    const modelBadge = document.getElementById("model_type_badge");
-
-    const s_cam_y = document.getElementById("s_cam_y");
-    const s_l = document.getElementById("s_l"), s_r = document.getElementById("s_r");
+    const video = document.getElementById("input_video"), connStatus = document.getElementById("conn_status");
+    const micBarFill = document.getElementById("mic_bar_fill"), roomIdInput = document.getElementById("room_id");
+    const psyncToggle = document.getElementById("psync_mode"), modelBadge = document.getElementById("model_type_badge");
+    const s_cam_y = document.getElementById("s_cam_y"), s_l = document.getElementById("s_l"), s_r = document.getElementById("s_r");
     const s_blink = document.getElementById("s_blink"), s_mic = document.getElementById("s_mic");
 
     let currentVrm, faceLandmarker, lastVideoTime = -1;
@@ -95,16 +89,9 @@
     let modelHasPS = false, shouldResetPose = false, controls;
     let headWorldY = 1.2, targetCamYOffset = 0, currentCamYOffset = 0;
 
-    // --- メモリ節約用: オブジェクトの事前生成 (Zero-new) ---
-    const offsetRotation = new THREE.Quaternion();
-    const tempQuat1 = new THREE.Quaternion();
-    const tempQuat2 = new THREE.Quaternion();
-    const tempMatrix = new THREE.Matrix4();
-    const tempVec3 = new THREE.Vector3();
-    const vData = { 
-      h: 0, la: 0, ra: 0, b: 1.5, s: {}, r: null, s_scale: 1.0, 
-      camPos: [0,0,0], camTarget: [0,0,0] 
-    };
+    // --- メモリ節約用: オブジェクトの事前生成 ---
+    const offsetRotation = new THREE.Quaternion(), tempQuat1 = new THREE.Quaternion(), tempQuat2 = new THREE.Quaternion(), tempMatrix = new THREE.Matrix4();
+    const vData = { h:0, la:0, ra:0, b:1.5, s:{}, r:null, s_scale:1.0, camPos:[0,0,0], camTarget:[0,0,0] };
     const VRM_STANDARD_EXPRESSIONS = ['happy','angry','sad','relaxed','surprised','blinkLeft','blinkRight','aa','ih','ou','ee','oh','lookUp','lookDown','lookLeft','lookRight'];
 
     // --- カメラ・制御イベント ---
@@ -114,7 +101,6 @@
     };
     document.getElementById("btn_away").onclick = () => { targetCamYOffset = 2.0; };
     document.getElementById("btn_back").onclick = () => { targetCamYOffset = parseFloat(s_cam_y.value); };
-    document.getElementById("btn_reset_pose").onclick = () => { shouldResetPose = true; };
 
     function isPerfectSyncModel(vrm) {
       if (!vrm?.expressionManager) return false;
@@ -127,8 +113,7 @@
       mapped.blinkLeft = Math.min(1.0, get('eyeBlinkLeft') * bSense);
       mapped.blinkRight = Math.min(1.0, get('eyeBlinkRight') * bSense);
       const jaw = get('jawOpen'), pucker = get('mouthPucker'), funnel = get('mouthFunnel');
-      const stretch = (get('mouthStretchLeft') + get('mouthStretchRight')) / 2;
-      const smile = (get('mouthSmileLeft') + get('mouthSmileRight')) / 2;
+      const stretch = (get('mouthStretchLeft') + get('mouthStretchRight')) / 2, smile = (get('mouthSmileLeft') + get('mouthSmileRight')) / 2;
       mapped.aa = Math.min(1.0, jaw * Math.max(0.2, 1.0 - pucker - funnel));
       mapped.ih = Math.min(1.0, Math.max(stretch, smile * 0.5) * Math.max(0, 1.0 - jaw * 1.5) * 1.2);
       mapped.ou = Math.min(1.0, pucker);
@@ -149,6 +134,7 @@
         const b = document.getElementById("btn_copy"); b.innerText = "OK!"; setTimeout(() => b.innerText = "コピー", 2000);
       });
     };
+    document.getElementById("btn_reset_pose").onclick = () => { shouldResetPose = true; };
 
     const dbName = "VRM_Storage", storeName = "models";
     const openDb = () => new Promise(res => {
@@ -168,21 +154,14 @@
         currentVrm = gltf.userData.vrm;
         scene.add(gltf.scene);
         currentVrm.scene.scale.set(-1, 1, 1);
-        
-        // カメラ位置の初期化
         const head = currentVrm.humanoid.getNormalizedBoneNode("head");
         if (head) {
-          head.getWorldPosition(tempVec3);
-          headWorldY = tempVec3.y;
-          targetCamYOffset = parseFloat(s_cam_y.value);
-          currentCamYOffset = targetCamYOffset;
-          controls.target.set(0, headWorldY + targetCamYOffset, 0);
-          controls.update();
+          const wp = new THREE.Vector3(); head.getWorldPosition(wp);
+          headWorldY = wp.y; targetCamYOffset = parseFloat(s_cam_y.value); currentCamYOffset = targetCamYOffset;
+          controls.target.set(0, headWorldY + targetCamYOffset, 0); controls.update();
         }
-
         modelHasPS = isPerfectSyncModel(currentVrm);
-        modelBadge.style.display = "block";
-        modelBadge.innerText = modelHasPS ? "PS対応" : "自動マッピング";
+        modelBadge.style.display = "block"; modelBadge.innerText = modelHasPS ? "PS対応" : "自動マッピング";
         modelBadge.className = modelHasPS ? "badge-ps" : "badge-mapped";
         connStatus.innerText = "VRM準備OK"; connStatus.style.color = "#00ff00";
       });
@@ -194,85 +173,25 @@
       r.onsuccess = () => { if (r.result) loadVRM(r.result); };
     })();
 
-    // --- 配信開始ボタン：過去のログから接続ロジックを完全復元 ---
     document.getElementById("btn_start").onclick = async () => {
       if (!currentVrm) return;
       try {
-        // デバイス取得（ビデオ非表示、マイク解析のみの設定を維持）
-        const stream = await navigator.mediaDevices.getUserMedia({ 
-            audio: true, 
-            video: { width: 640, height: 480 } 
-        });
-
-        // 映像のセットアップ（メモリ内再生）
-        const videoOnlyStream = new MediaStream(stream.getVideoTracks());
-        video.srcObject = stream; 
-        video.muted = true; // 確実にミュート
-        video.volume = 0;   // 念のため音量ゼロ
-        video.play();;
-
-        // オーディオ解析には「元のstream（音声入り）」を使用する
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: { width: 640, height: 480 } });
+        video.srcObject = stream; video.play();
+        document.getElementById("video_ui").style.display = "none";
         audioContext = new (window.AudioContext || window.webkitAudioContext)();
         const src = audioContext.createMediaStreamSource(stream);
-        analyser = audioContext.createAnalyser(); 
-        analyser.fftSize = 256; 
-        src.connect(analyser); 
-        // ※ audioContext.destination に connect しないことでスピーカーへの出力を完全に防ぐ
+        analyser = audioContext.createAnalyser(); analyser.fftSize = 256; src.connect(analyser);
         dataArray = new Uint8Array(analyser.frequencyBinCount);
-        
-       
-        // ---接続ロジック---
         if (peer) peer.destroy();
-        
-        // Receiverが「探しに来る」側
         peer = new Peer(roomIdInput.value);
-
-        // 自分のIDが発行された（看板を掲げた）時の処理
-        peer.on('open', (id) => {
-          connStatus.innerText = "配信待機中: " + id;
-          connStatus.style.color = "#00ff00";
-          document.getElementById("live_indicator").style.display = "block";
-          console.log("Sender Ready: ID [" + id + "] で接続を待機しています...");
-        });
-
-        // Receiverが接続してきた時のハンドリング
-        peer.on('connection', (conn) => {
-          console.log("Receiverと接続を確立しました:", conn.peer);
-          
-          // 接続が確立(open)してからリストに追加する
-          conn.on('open', () => {
-            connections.push(conn);
-          });
-
-          // 切断されたらリストから除外する（メモリリーク・エラー防止）
-          conn.on('close', () => {
-            connections = connections.filter(c => c !== conn);
-            console.log("Receiverが切断されました");
-          });
-
-          conn.on('error', (err) => {
-            console.error("Connection Error:", err);
-            connections = connections.filter(c => c !== conn);
-          });
-        });
-
-        // Peer自体のエラー処理
-        peer.on('error', (err) => {
-          console.error("Peer Error Type:", err.type);
-          connStatus.innerText = "通信エラー: " + err.type;
-          connStatus.style.color = "#ff4444";
-        });
-
-      } catch (e) { 
-        alert("カメラ/マイクの起動に失敗しました。権限を確認してください。"); 
-      }
+        peer.on('open', id => { connStatus.innerText = "配信中: " + id; document.getElementById("live_indicator").style.display = "block"; });
+        peer.on('connection', c => { c.on('open', () => { connections.push(c); }); c.on('close', () => { connections = connections.filter(x => x !== c); }); });
+      } catch (e) { alert("カメラ/マイク起動失敗"); }
     };
-    
-            
+
     function animate() {
       requestAnimationFrame(animate);
-      
-      // カメラ・コントロールの更新
       if (controls) {
         const sVal = parseFloat(s_cam_y.value);
         document.getElementById("v_cam_y").innerText = sVal.toFixed(2);
@@ -282,18 +201,15 @@
         controls.update();
       }
       
-      // マイクの更新
       if (analyser) {
         analyser.getByteFrequencyData(dataArray);
         currentVolume = (dataArray.reduce((a, b) => a + b, 0) / dataArray.length) / 128.0;
         micBarFill.style.width = Math.min(100, currentVolume * 400) + "%";
       }
 
-      // トラッキングの更新
       if (video.readyState >= 2 && video.currentTime !== lastVideoTime) {
         lastVideoTime = video.currentTime;
         const res = faceLandmarker ? faceLandmarker.detectForVideo(video, performance.now()) : null;
-        
         const l = parseFloat(s_l.value), r = parseFloat(s_r.value), bS = parseFloat(s_blink.value), mS = parseFloat(s_mic.value);
         document.getElementById("v_l").innerText = l; document.getElementById("v_r").innerText = r;
         document.getElementById("v_blink").innerText = bS; document.getElementById("v_mic").innerText = mS;
@@ -304,8 +220,7 @@
 
         if (currentVrm) {
           const aL = currentVrm.humanoid.getNormalizedBoneNode("leftUpperArm"), aR = currentVrm.humanoid.getNormalizedBoneNode("rightUpperArm");
-          if (aL) aL.rotation.z = THREE.MathUtils.degToRad(l); 
-          if (aR) aR.rotation.z = THREE.MathUtils.degToRad(-r);
+          if (aL) aL.rotation.z = THREE.MathUtils.degToRad(l); if (aR) aR.rotation.z = THREE.MathUtils.degToRad(-r);
 
           const exp = currentVrm.expressionManager;
           if (res && res.faceBlendshapes.length > 0) {
@@ -331,11 +246,10 @@
               exp.setValue("blinkLeft", bL); exp.setValue("blinkRight", bR); exp.setValue("aa", mO);
               vData.s = { eyeBlinkLeft: bL, eyeBlinkRight: bR, jawOpen: mO, aa: mO };
             }
-            
-            // 目のボーン動作改善版 (10deg, 7deg in Rad)
+            // 目のボーン動作改善版
             const lE = currentVrm.humanoid.getNormalizedBoneNode("leftEye"), rE = currentVrm.humanoid.getNormalizedBoneNode("rightEye");
             if (lE && rE) {
-              const mp = 0.174, my = 0.122; 
+              const mp = 0.174, my = 0.122; // 10deg, 7deg in Rad
               lE.rotation.set(((shapes.eyeLookDownLeft||0)-(shapes.eyeLookUpLeft||0))*mp, ((shapes.eyeLookOutLeft||0)-(shapes.eyeLookInLeft||0))*my, 0);
               rE.rotation.set(((shapes.eyeLookDownRight||0)-(shapes.eyeLookUpRight||0))*mp, ((shapes.eyeLookInRight||0)-(shapes.eyeLookOutRight||0))*my, 0);
             }
@@ -363,7 +277,6 @@
     const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
     renderer.setSize(window.innerWidth, window.innerHeight); document.body.appendChild(renderer.domElement);
     scene.add(camera, new THREE.DirectionalLight(0xffffff, Math.PI), new THREE.AmbientLight(0xffffff, 0.5));
-    
     controls = new OrbitControls(camera, renderer.domElement);
     controls.enableDamping = true; controls.enablePan = false; controls.minDistance = 0.5; controls.maxDistance = 5.0; controls.target.set(0, 1.2, 0);
 
