@@ -220,8 +220,28 @@
         // ... PeerJS等の処理 ...
         if (peer) peer.destroy();
         peer = new Peer(roomIdInput.value);
-        peer.on('open', id => { connStatus.innerText = "配信中: " + id; document.getElementById("live_indicator").style.display = "block"; });
-        peer.on('connection', conn => { conn.on('open', () => connections.push(conn)); });
+
+        peer.on('open', id => {
+          connStatus.innerText = "配信中: " + id;
+          connStatus.style.color = "#00ff00";
+          document.getElementById("live_indicator").style.display = "block";
+        });
+
+        peer.on('connection', c => { 
+          c.on('open', () => { 
+            connections.push(c); 
+            console.log("Connected to receiver");
+          }); 
+          c.on('close', () => { 
+            connections = connections.filter(x => x !== c); 
+          }); 
+        });
+
+        peer.on('error', err => {
+          connStatus.innerText = "通信エラー: " + err.type;
+          connStatus.style.color = "#ff4444";
+        });
+       
       } catch (e) { alert("カメラ/マイク起動失敗"); }
     };
     
