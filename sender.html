@@ -219,32 +219,30 @@
         
         // ... PeerJS等の処理 ...
         if (peer) peer.destroy();
-        peer = new Peer(roomIdInput.value);
+        peer = new Peer(); // 自分のIDは自動割り当て
 
-        peer.on('open', id => {
-          connStatus.innerText = "配信中: " + id;
-          connStatus.style.color = "#00ff00";
-          document.getElementById("live_indicator").style.display = "block";
+        peer.on('open', () => {
+            // 安全なID形式かチェック（サニタイズ相当）
+            const targetId = roomIdInput.value.replace(/[^a-zA-Z0-9-]/g, ""); 
+            connStatus.innerText = "接続中...";
+            
+            const c = peer.connect(targetId, { reliable: true });
+            
+            c.on('open', () => {
+                connections.push(c);
+                connStatus.innerText = "配信中: " + targetId;
+                document.getElementById("live_indicator").style.display = "block";
+            });
+
+            c.on('close', () => {
+                connections = connections.filter(x => x !== c);
+                connStatus.innerText = "切断されました";
+            });
         });
 
-        peer.on('connection', c => { 
-          c.on('open', () => { 
-            connections.push(c); 
-            console.log("Connected to receiver");
-          }); 
-          c.on('close', () => { 
-            connections = connections.filter(x => x !== c); 
-          }); 
-        });
-
-        peer.on('error', err => {
-          connStatus.innerText = "通信エラー: " + err.type;
-          connStatus.style.color = "#ff4444";
-        });
-       
-      } catch (e) { alert("カメラ/マイク起動失敗"); }
-    };
-    
+    } catch (e) { alert("デバイスの起動に失敗しました"); }
+};        
+            
     function animate() {
       requestAnimationFrame(animate);
       
