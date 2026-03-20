@@ -2,7 +2,7 @@
 <html>
 <head>
     <meta charset="utf-8">
-    <title>VRM Stable Receiver - Ultimate Secure Edition</title>
+    <title>VRM Receiver (Ultimate Secure & Optimized)</title>
     <style>
         body { margin: 0; background: transparent; color: white; font-family: 'Segoe UI', sans-serif; overflow: hidden; width: 100vw; height: 100vh; }
         #ui_panel { position: absolute; top: 15px; left: 15px; background: rgba(15, 15, 15, 0.95); padding: 18px; z-index: 100; border-radius: 12px; width: 280px; border: 1px solid #333; box-shadow: 0 8px 32px rgba(0, 0, 0, 0.8); transition: opacity 0.4s ease, visibility 0.4s; opacity: 0; visibility: hidden; }
@@ -34,10 +34,7 @@
                 <span id="model_type_badge">No Model</span>
             </span>
         </div>
-        <div class="control-group">
-            <label>Local VRM File</label>
-            <input type="file" id="vrm_file" accept=".vrm">
-        </div>
+        <div class="control-group"><label>Local VRM File</label><input type="file" id="vrm_file" accept=".vrm"></div>
         <hr>
         <div class="control-group">
             <label>Transmitter ID (Secure)</label>
@@ -51,13 +48,11 @@
     </div>
 
     <script type="importmap">
-    {
-      "imports": {
+    { "imports": {
         "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
         "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/",
         "@pixiv/three-vrm": "https://cdn.jsdelivr.net/npm/@pixiv/three-vrm@2.1.0/lib/three-vrm.module.js"
-      }
-    }
+    } }
     </script>
 
     <script type="module">
@@ -65,19 +60,26 @@
         import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
         import { VRMLoaderPlugin } from '@pixiv/three-vrm';
 
-        // --- 1. セキュリティ & サニタイズ ---
+        const statusEl = document.getElementById("status"), targetInput = document.getElementById("target_id");
+        const connectBtn = document.getElementById("btn_connect"), modelBadge = document.getElementById("model_type_badge"), vBadge = document.getElementById('vrm_version_badge');
+
+        let currentVrm, scene, camera, renderer, peer, conn, currentVrmUrl, reconnectTimer = null, modelHasPS = false, isVRM0 = false;
+        
+        // --- メモリ節約用: オブジェクトの事前生成 (Zero-new) ---
+        const tempQuat = new THREE.Quaternion(), halfQuat = new THREE.Quaternion(), tempVec3 = new THREE.Vector3(), headPos = new THREE.Vector3();
+        let targetData = { h:0, la:0, ra:0, r:[0,0,0,1], s:null, b:1.5, s_scale:1.0, camPos:[0,1.4,1.5], camTarget:[0,1.2,0] };
+        const VRM_STANDARD_EXPRESSIONS = ['happy','angry','sad','relaxed','surprised','blinkLeft','blinkRight','aa','ih','ou','ee','oh','lookUp','lookDown','lookLeft','lookRight'];
+
+        // --- 1. セキュリティ ---
         function secureSanitize(str) {
-            if (!str || typeof str !== 'string') return "";
-            return str.replace(/[\u0000-\u001F\u007F-\u009F\u200B-\u200D\uFEFF]/g, "").trim();
+            return (typeof str === 'string') ? str.replace(/[\u0000-\u001F\u007F-\u009F\u200B-\u200D\uFEFF]/g, "").trim() : "";
         }
 
         function isSafeAndValidVrm(url) {
             try {
-                const parsed = new URL(url);
-                if (parsed.protocol !== "http:" && parsed.protocol !== "https:") return false;
-                const pathname = parsed.pathname.toLowerCase();
-                return pathname.endsWith(".vrm") || pathname.endsWith(".glb");
-            } catch (e) { return false; }
+                const p = new URL(url);
+                return (p.protocol === "http:" || p.protocol === "https:") && (p.pathname.toLowerCase().endsWith(".vrm") || p.pathname.toLowerCase().endsWith(".glb"));
+            } catch(e) { return false; }
         }
 
         function fixDirectUrl(url) {
@@ -85,250 +87,141 @@
             let d = url;
             if (d.includes("1drv.ms")) {
                 try {
-                    const b64 = btoa(d).replace(/\//g, '_').replace(/\+/g, '-').replace(/=/g, '');
-                    return `https://api.onedrive.com/v1.0/shares/u!${b64}/root/content`;
-                } catch (e) { return d; }
+                    const b = btoa(d).replace(/\//g,'_').replace(/\+/g,'-').replace(/=/g,'');
+                    return `https://api.onedrive.com/v1.0/shares/u!${b}/root/content`;
+                } catch(e) { return d; }
             }
             if (d.includes("www.dropbox.com")) d = d.replace("www.dropbox.com", "dl.dropboxusercontent.com").replace(/\?dl=[01]/, "");
             if (d.includes("drive.google.com")) {
-                const match = d.match(/\/d\/([^\/]+)/);
-                if (match) d = `https://docs.google.com/uc?id=${match[1]}&export=download`;
+                const m = d.match(/\/d\/([^\/]+)/);
+                if (m) d = `https://docs.google.com/uc?id=${m[1]}&export=download`;
             }
             return d;
         }
 
-        // --- 2. DOM & 状態管理 ---
-        const statusEl = document.getElementById("status"), targetInput = document.getElementById("target_id");
-        const connectBtn = document.getElementById("btn_connect"), modelBadge = document.getElementById("model_type_badge");
-        const vBadge = document.getElementById('vrm_version_badge');
-
-        let currentVrm, scene, camera, renderer, peer, conn, currentVrmUrl;
-        let reconnectTimer = null, modelHasPS = false, isVRM0 = false;
-        let targetData = { 
-            h: 0, la: 0, ra: 0, r: [0, 0, 0, 1], s: null, b: 1.5, s_scale: 1.0,
-            camPos: [0, 1.4, 1.5], camTarget: [0, 1.2, 0] 
-        };
-
-        // --- 3. セキュア初期化フロー ---
+        // --- 2. 初期化 ---
         const urlParams = new URLSearchParams(window.location.search);
         const urlId = secureSanitize(urlParams.get('id')), urlVrm = secureSanitize(urlParams.get('vrm'));
         if (urlId) targetInput.value = urlId;
 
         let vrmToLoad = null;
-        if (urlVrm !== "") {
-            if (isSafeAndValidVrm(urlVrm)) {
-                vrmToLoad = fixDirectUrl(urlVrm);
-                localStorage.setItem("vrm_save_url", urlVrm);
-            } else {
-                statusEl.innerText = "Blocked: Unsafe URL";
-                statusEl.style.color = "#ff4444";
-            }
+        if (urlVrm && isSafeAndValidVrm(urlVrm)) {
+            vrmToLoad = fixDirectUrl(urlVrm);
+            localStorage.setItem("vrm_save_url", urlVrm);
         } else {
-            const savedVrm = secureSanitize(localStorage.getItem("vrm_save_url"));
-            if (savedVrm !== "" && isSafeAndValidVrm(savedVrm)) vrmToLoad = fixDirectUrl(savedVrm);
+            const saved = secureSanitize(localStorage.getItem("vrm_save_url"));
+            if (saved && isSafeAndValidVrm(saved)) vrmToLoad = fixDirectUrl(saved);
         }
 
-        // --- 4. 技術ロジック ---
-        function detectVRMVersion(gltf) {
-            if (gltf.parser?.json?.extensions) {
-                const ext = gltf.parser.json.extensions;
-                if (ext.VRMC_vrm) return { version: '1.0' };
-                if (ext.VRM) return { version: '0.x' };
-            }
-            return { version: 'unknown' };
-        }
-
-        function isPerfectSyncModel(vrm) {
-            if (!vrm?.expressionManager) return false;
-            return ['browDownLeft', 'cheekPuff', 'noseSneerLeft'].some(n => vrm.expressionManager.getExpression(n) != null);
-        }
-
-        function safeSetExpression(exp, name, value) {
-            try {
-                if (exp.getExpression(name)) { exp.setValue(name, value); return; }
-                const cap = name.charAt(0).toUpperCase() + name.slice(1);
-                if (exp.getExpression(cap)) exp.setValue(cap, value);
-            } catch (e) {}
-        }
-
-        function safeGetExpression(exp, name) {
-            try {
-                const val = exp.getValue(name);
-                if (val !== undefined && val !== null) return val;
-                const cap = name.charAt(0).toUpperCase() + name.slice(1);
-                return exp.getValue(cap) || 0;
-            } catch (e) { return 0; }
-        }
-
-        const VRM_STANDARD_EXPRESSIONS = ['happy', 'angry', 'sad', 'relaxed', 'surprised', 'blinkLeft', 'blinkRight', 'aa', 'ih', 'ou', 'ee', 'oh', 'lookUp', 'lookDown', 'lookLeft', 'lookRight'];
-
-        function mapARKitToVRM(shapes, bSense) {
+        // --- 3. ロジック ---
+        function mapARKitToVRM(shapes, bS) {
             const get = (n) => shapes[n] || 0;
-            const mapped = {};
-            mapped.blinkLeft = Math.min(1.0, get('eyeBlinkLeft') * bSense);
-            mapped.blinkRight = Math.min(1.0, get('eyeBlinkRight') * bSense);
-            const jawOpen = get('jawOpen'), pucker = get('mouthPucker'), funnel = get('mouthFunnel');
-            const stretch = (get('mouthStretchLeft') + get('mouthStretchRight')) / 2, smile = (get('mouthSmileLeft') + get('mouthSmileRight')) / 2;
-            mapped.aa = Math.min(1.0, jawOpen * Math.max(0.2, 1.0 - pucker - funnel));
-            mapped.ih = Math.min(1.0, Math.max(stretch, smile * 0.5) * Math.max(0, 1.0 - jawOpen * 1.5) * 1.2);
-            mapped.ou = Math.min(1.0, pucker);
-            mapped.ee = Math.min(1.0, jawOpen * Math.max(stretch, smile * 0.3) * 2.0);
-            mapped.oh = Math.min(1.0, funnel);
-            mapped.happy = Math.min(0.5, Math.max(0, smile - 0.25) * 0.8);
-            mapped.angry = Math.min(0.5, Math.max(0, (get('mouthFrownLeft') * 0.6 + get('browDownLeft') * 0.4) - 0.2));
-            mapped.surprised = Math.min(0.5, Math.max(0, (get('eyeWideLeft') * 0.5 + get('browInnerUp') * 0.5) - 0.15));
-            return mapped;
+            const jaw = get('jawOpen'), stretch = (get('mouthStretchLeft')+get('mouthStretchRight'))/2, smile = (get('mouthSmileLeft')+get('mouthSmileRight'))/2;
+            return {
+                blinkLeft: Math.min(1.0, get('eyeBlinkLeft') * bS), blinkRight: Math.min(1.0, get('eyeBlinkRight') * bS),
+                aa: Math.min(1.0, jaw * Math.max(0.2, 1.0 - get('mouthPucker') - get('mouthFunnel'))),
+                ih: Math.min(1.0, Math.max(stretch, smile * 0.5) * Math.max(0, 1.0 - jaw * 1.5) * 1.2),
+                ou: Math.min(1.0, get('mouthPucker')), oh: Math.min(1.0, get('mouthFunnel')),
+                ee: Math.min(1.0, jaw * Math.max(stretch, smile * 0.3) * 2.0),
+                happy: Math.min(0.5, Math.max(0, smile - 0.25) * 0.8),
+                angry: Math.min(0.5, Math.max(0, ((get('mouthFrownLeft')+get('mouthFrownRight'))/2 * 0.6 + get('browDownLeft') * 0.4) - 0.2)),
+                surprised: Math.min(0.5, Math.max(0, (get('eyeWideLeft') * 0.5 + get('browInnerUp') * 0.5) - 0.15)),
+                lookUp: (get('eyeLookUpLeft')+get('eyeLookUpRight'))/2, lookDown: (get('eyeLookDownLeft')+get('eyeLookDownRight'))/2,
+                lookLeft: (get('eyeLookInLeft')+get('eyeLookOutRight'))/2, lookRight: (get('eyeLookOutLeft')+get('eyeLookInRight'))/2
+            };
         }
 
         function loadVRM(url) {
             statusEl.innerText = "Loading VRM...";
             new GLTFLoader().register(p => new VRMLoaderPlugin(p)).load(url, gltf => {
                 if (currentVrm) scene.remove(currentVrm.scene);
-                currentVrm = gltf.userData.vrm;
-                scene.add(gltf.scene);
-                currentVrm.scene.scale.set(-1, 1, 1);
-                const vrmVer = detectVRMVersion(gltf);
-                isVRM0 = (vrmVer.version === '0.x');
-                vBadge.innerText = `VRM ${vrmVer.version}`;
-                vBadge.className = isVRM0 ? 'badge-vrm0' : 'badge-vrm1';
-                modelHasPS = isPerfectSyncModel(currentVrm);
-                modelBadge.innerText = modelHasPS ? "PS対応" : "自動マッピング";
-                modelBadge.className = modelHasPS ? "badge-ps" : "badge-mapped";
-
-                // 【復元】カメラ位置の自動調整
+                currentVrm = gltf.userData.vrm; scene.add(gltf.scene); currentVrm.scene.scale.set(-1,1,1);
+                const ext = gltf.parser?.json?.extensions;
+                isVRM0 = !!ext?.VRM; vBadge.innerText = `VRM ${isVRM0 ? '0.x' : '1.0'}`; vBadge.className = isVRM0 ? 'badge-vrm0' : 'badge-vrm1';
+                modelHasPS = ['browDownLeft','cheekPuff','noseSneerLeft'].some(n => currentVrm.expressionManager.getExpression(n));
+                modelBadge.innerText = modelHasPS ? "PS対応" : "自動マッピング"; modelBadge.className = modelHasPS ? "badge-ps" : "badge-mapped";
                 const head = currentVrm.humanoid.getNormalizedBoneNode("head");
-                if (head) {
-                    const worldPos = new THREE.Vector3();
-                    head.getWorldPosition(worldPos);
-                    camera.position.set(0, worldPos.y, 1.5);
-                    if (!camera.userData.target) camera.userData.target = new THREE.Vector3(0, worldPos.y, 0);
-                    camera.lookAt(camera.userData.target);
-                }
-
+                if (head) { head.getWorldPosition(headPos); camera.position.set(0, headPos.y, 1.5); if(!camera.userData.target) camera.userData.target = new THREE.Vector3(0, headPos.y, 0); camera.lookAt(camera.userData.target); }
                 statusEl.innerText = "Model Ready"; statusEl.style.color = "#00ff00";
                 if (targetInput.value.trim() !== "") connectToSender();
-            }, undefined, err => { statusEl.innerText = "Load Failed"; console.error(err); });
+            });
         }
 
         function connectToSender() {
-            const targetId = targetInput.value.trim();
-            if (!currentVrm || !targetId) return;
+            const id = targetInput.value.trim(); if (!currentVrm || !id) return;
             if (peer) peer.destroy();
-            peer = new Peer();
-            connectBtn.innerText = "CONNECTING...";
+            peer = new Peer(); connectBtn.innerText = "CONNECTING...";
             peer.on('open', () => {
-                conn = peer.connect(targetId);
-                conn.on('open', () => {
-                    statusEl.innerText = "Online"; statusEl.style.color = "#00ff00";
-                    connectBtn.innerText = "CONNECTED"; connectBtn.className = "btn-main online";
-                    if (reconnectTimer) { clearInterval(reconnectTimer); reconnectTimer = null; }
-                });
+                conn = peer.connect(id);
+                conn.on('open', () => { statusEl.innerText = "Online"; connectBtn.innerText = "CONNECTED"; connectBtn.className = "btn-main online"; if (reconnectTimer) { clearInterval(reconnectTimer); reconnectTimer = null; } });
                 conn.on('data', data => { if (data) targetData = data; });
                 conn.on('close', startReconnect);
             });
             peer.on('error', startReconnect);
         }
 
-        function startReconnect() {
-            if (reconnectTimer) return;
-            statusEl.innerText = "Retrying..."; connectBtn.innerText = "RECONNECTING...";
-            reconnectTimer = setInterval(connectToSender, 5000);
-        }
+        function startReconnect() { if (!reconnectTimer) { statusEl.innerText = "Retrying..."; reconnectTimer = setInterval(connectToSender, 5000); } }
 
-        document.getElementById("vrm_file").onchange = (e) => {
-            const file = e.target.files[0]; if (!file) return;
-            if (currentVrmUrl) URL.revokeObjectURL(currentVrmUrl);
-            currentVrmUrl = URL.createObjectURL(file); loadVRM(currentVrmUrl);
-        };
+        document.getElementById("vrm_file").onchange = (e) => { const f = e.target.files[0]; if (f) { if(currentVrmUrl) URL.revokeObjectURL(currentVrmUrl); currentVrmUrl = URL.createObjectURL(f); loadVRM(currentVrmUrl); } };
         connectBtn.onclick = () => { if (reconnectTimer) clearInterval(reconnectTimer); connectToSender(); };
 
-        // --- 5. Three.js & アニメーション ---
-        scene = new THREE.Scene();
-        camera = new THREE.PerspectiveCamera(30, window.innerWidth / window.innerHeight, 0.1, 20.0);
+        // --- 4. Render Loop ---
+        scene = new THREE.Scene(); camera = new THREE.PerspectiveCamera(30, window.innerWidth/window.innerHeight, 0.1, 20);
         renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, premultipliedAlpha: false });
-        renderer.setSize(window.innerWidth, window.innerHeight); renderer.setClearColor(0x000000, 0);
-        document.body.appendChild(renderer.domElement);
-        const camLight = new THREE.DirectionalLight(0xffffff, Math.PI); camLight.position.set(0, 0, 1);
-        camera.add(camLight); scene.add(camera, new THREE.AmbientLight(0xffffff, 0.5));
+        renderer.setSize(window.innerWidth, window.innerHeight); renderer.setClearColor(0,0); document.body.appendChild(renderer.domElement);
+        const l = new THREE.DirectionalLight(0xffffff, Math.PI); l.position.set(0,0,1); camera.add(l); scene.add(camera, new THREE.AmbientLight(0xffffff, 0.5));
 
         function animate() {
             requestAnimationFrame(animate);
             if (currentVrm && targetData) {
-                const lerpSpeed = 0.20, mouthSpeed = 0.60;
-                // 【復元】カメラ同期
+                const lerp = 0.2, mouth = 0.6;
                 if (targetData.camPos && targetData.camTarget) {
-                    camera.position.lerp(new THREE.Vector3().fromArray(targetData.camPos), lerpSpeed);
-                    const tTarget = new THREE.Vector3().fromArray(targetData.camTarget);
-                    if (!camera.userData.target) camera.userData.target = new THREE.Vector3().copy(tTarget);
-                    camera.userData.target.lerp(tTarget, lerpSpeed);
+                    camera.position.lerp(tempVec3.fromArray(targetData.camPos), lerp);
+                    if (!camera.userData.target) camera.userData.target = new THREE.Vector3().fromArray(targetData.camTarget);
+                    camera.userData.target.lerp(tempVec3.fromArray(targetData.camTarget), lerp);
                     camera.lookAt(camera.userData.target);
                 }
-                // 位置・スケール・回転
-                currentVrm.scene.position.y += (targetData.h - currentVrm.scene.position.y) * lerpSpeed;
-                const nextS = Math.abs(currentVrm.scene.scale.x) + ((targetData.s_scale || 1.0) - Math.abs(currentVrm.scene.scale.x)) * lerpSpeed;
-                currentVrm.scene.scale.set(isVRM0 ? nextS : -nextS, nextS, isVRM0 ? -nextS : nextS);
-
-                const armL = currentVrm.humanoid.getNormalizedBoneNode("leftUpperArm"), armR = currentVrm.humanoid.getNormalizedBoneNode("rightUpperArm");
-                if (armL) armL.rotation.z += (THREE.MathUtils.degToRad(targetData.la) - armL.rotation.z) * lerpSpeed;
-                if (armR) armR.rotation.z += (THREE.MathUtils.degToRad(-targetData.ra) - armR.rotation.z) * lerpSpeed;
-
+                currentVrm.scene.position.y += (targetData.h - currentVrm.scene.position.y) * lerp;
+                const ns = Math.abs(currentVrm.scene.scale.x) + ((targetData.s_scale || 1.0) - Math.abs(currentVrm.scene.scale.x)) * lerp;
+                currentVrm.scene.scale.set(isVRM0 ? ns : -ns, ns, isVRM0 ? -ns : ns);
+                const aL = currentVrm.humanoid.getNormalizedBoneNode("leftUpperArm"), aR = currentVrm.humanoid.getNormalizedBoneNode("rightUpperArm");
+                if(aL) aL.rotation.z += (THREE.MathUtils.degToRad(targetData.la) - aL.rotation.z) * lerp;
+                if(aR) aR.rotation.z += (THREE.MathUtils.degToRad(-targetData.ra) - aR.rotation.z) * lerp;
                 if (targetData.r) {
-                    const head = currentVrm.humanoid.getNormalizedBoneNode("head"), neck = currentVrm.humanoid.getNormalizedBoneNode("neck");
-                    const targetQuat = new THREE.Quaternion().fromArray(targetData.r), halfQuat = new THREE.Quaternion().set(0,0,0,1).slerp(targetQuat, 0.5);
-                    if (head && neck) { neck.quaternion.slerp(halfQuat, lerpSpeed); head.quaternion.slerp(halfQuat, lerpSpeed); }
+                    const h = currentVrm.humanoid.getNormalizedBoneNode("head"), n = currentVrm.humanoid.getNormalizedBoneNode("neck");
+                    tempQuat.fromArray(targetData.r); halfQuat.set(0,0,0,1).slerp(tempQuat, 0.5);
+                    if (h && n) { n.quaternion.slerp(halfQuat, lerp); h.quaternion.slerp(halfQuat, lerp); }
                 }
-
                 if (targetData.s) {
-                    const exp = currentVrm.expressionManager, bSense = targetData.b || 1.5;
+                    const exp = currentVrm.expressionManager, bS = targetData.b || 1.5;
                     if (modelHasPS) {
-                        const SKIP = new Set(['eyeBlinkLeft', 'eyeBlinkRight', 'eyeLookDownLeft', 'eyeLookDownRight', 'eyeLookInLeft', 'eyeLookInRight', 'eyeLookOutLeft', 'eyeLookOutRight', 'eyeLookUpLeft', 'eyeLookUpRight']);
+                        const SKIP = new Set(['eyeBlinkLeft','eyeBlinkRight','eyeLookDownLeft','eyeLookDownRight','eyeLookInLeft','eyeLookInRight','eyeLookOutLeft','eyeLookOutRight','eyeLookUpLeft','eyeLookUpRight']);
                         Object.keys(targetData.s).forEach(k => {
                             const val = targetData.s[k];
-                            if (k === "eyeBlinkLeft" || k === "eyeBlinkRight") {
-                                const vK = (k === "eyeBlinkLeft") ? "blinkLeft" : "blinkRight";
-                                const cur = safeGetExpression(exp, vK); safeSetExpression(exp, vK, cur + (Math.min(1.0, val * bSense) - cur) * mouthSpeed);
-                            } else if (k === "jawOpen" || k === "aa") {
-                                const cur = safeGetExpression(exp, "aa"); safeSetExpression(exp, "aa", cur + (val - cur) * mouthSpeed); safeSetExpression(exp, "jawOpen", cur + (val - cur) * mouthSpeed);
-                            } else if (!SKIP.has(k)) {
-                                const cur = safeGetExpression(exp, k); safeSetExpression(exp, k, cur + (val - cur) * lerpSpeed);
-                            }
+                            if (k.includes('eyeBlink')) { const vk = k.includes('Left') ? 'blinkLeft' : 'blinkRight'; exp.setValue(vk, exp.getValue(vk) + (Math.min(1.0, val * bS) - exp.getValue(vk)) * lerp); }
+                            else if (k === 'jawOpen' || k === 'aa') { exp.setValue('aa', exp.getValue('aa') + (val - exp.getValue('aa')) * mouth); exp.setValue('jawOpen', exp.getValue('aa')); }
+                            else if (!SKIP.has(k)) { exp.setValue(k, (exp.getValue(k)||0) + (val - (exp.getValue(k)||0)) * lerp); }
                         });
                     } else {
-                        const mapped = mapARKitToVRM(targetData.s, bSense);
-                        VRM_STANDARD_EXPRESSIONS.forEach(n => {
-                            const cur = safeGetExpression(exp, n), spd = (n === 'aa' || n === 'ih' || n === 'ou' || n === 'ee' || n === 'oh') ? mouthSpeed : lerpSpeed;
-                            safeSetExpression(exp, n, cur + ((mapped[n] || 0) - cur) * spd);
-                        });
+                        const m = mapARKitToVRM(targetData.s, bS);
+                        VRM_STANDARD_EXPRESSIONS.forEach(n => { const spd = n.length < 3 ? mouth : lerp; exp.setValue(n, (exp.getValue(n)||0) + ((m[n]||0) - (exp.getValue(n)||0)) * spd); });
                     }
-                    // 視線ボーン
-                    const leftEye = currentVrm.humanoid.getNormalizedBoneNode("leftEye"), rightEye = currentVrm.humanoid.getNormalizedBoneNode("rightEye");
-                    if (leftEye && rightEye) {
-                        const s = targetData.s, mp = 10 * Math.PI / 180, my = 7 * Math.PI / 180;
-                        leftEye.rotation.x += (((s.eyeLookDownLeft || 0) - (s.eyeLookUpLeft || 0)) * mp - leftEye.rotation.x) * lerpSpeed;
-                        leftEye.rotation.y += (((s.eyeLookOutLeft || 0) - (s.eyeLookInLeft || 0)) * my - leftEye.rotation.y) * lerpSpeed;
-                        rightEye.rotation.x += (((s.eyeLookDownRight || 0) - (s.eyeLookUpRight || 0)) * mp - rightEye.rotation.x) * lerpSpeed;
-                        rightEye.rotation.y += (((s.eyeLookInRight || 0) - (s.eyeLookOutRight || 0)) * my - rightEye.rotation.y) * lerpSpeed;
+                    const lE = currentVrm.humanoid.getNormalizedBoneNode("leftEye"), rE = currentVrm.humanoid.getNormalizedBoneNode("rightEye");
+                    if (lE && rE) {
+                        const s = targetData.s, mp = 0.174, my = 0.122;
+                        lE.rotation.x += (((s.eyeLookDownLeft||0)-(s.eyeLookUpLeft||0))*mp - lE.rotation.x) * lerp;
+                        lE.rotation.y += (((s.eyeLookOutLeft||0)-(s.eyeLookInLeft||0))*my - lE.rotation.y) * lerp;
+                        rE.rotation.x += (((s.eyeLookDownRight||0)-(s.eyeLookUpRight||0))*mp - rE.rotation.x) * lerp;
+                        rE.rotation.y += (((s.eyeLookInRight||0)-(s.eyeLookOutRight||0))*my - rE.rotation.y) * lerp;
                     }
                 }
-                currentVrm.update(1.0 / 60.0);
+                currentVrm.update(0.016);
             }
             renderer.render(scene, camera);
         }
 
-        window.addEventListener('load', () => {
-            animate();
-            if (vrmToLoad) loadVRM(vrmToLoad);
-            else statusEl.innerText = "Please select VRM file";
-        });
-
-        window.addEventListener('resize', () => {
-            camera.aspect = window.innerWidth / window.innerHeight;
-            camera.updateProjectionMatrix();
-            renderer.setSize(window.innerWidth, window.innerHeight);
-        });
-    </script>
-</body>
-</html>
+        window.addEventListener('load', () => { animate(); if(vrmToLoad) loadVRM(vrmToLoad); else statusEl.innerText = "Please select VRM file"; });
+        window.addEventListener('resize', () => { camera.aspect = window.innerWidth/window.innerHeight; camera.updateProjectionMatrix(); renderer.setSize(window.innerWidth, window.innerHeight); });
     </script>
 </body>
 </html>
