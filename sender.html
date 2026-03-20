@@ -194,51 +194,75 @@
       r.onsuccess = () => { if (r.result) loadVRM(r.result); };
     })();
 
+    // --- 配信開始ボタン：過去のログから接続ロジックを完全復元 ---
     document.getElementById("btn_start").onclick = async () => {
       if (!currentVrm) return;
       try {
-        // 1. カメラとマイクの両方を取得
+        // デバイス取得（ビデオ非表示、マイク解析のみの設定を維持）
         const stream = await navigator.mediaDevices.getUserMedia({ 
             audio: true, 
             video: { width: 640, height: 480 } 
         });
 
-        //ビデオ要素が音を鳴らす可能性を根本から断ち切ります
-        const videoStream = new MediaStream(stream.getVideoTracks());
-        video.srcObject = videoStream; 
+        // 映像のセットアップ（メモリ内再生）
+        video.srcObject = stream;
         video.play();
 
-        //【口パク解析】解析には元の stream（音声入り）を使用
+        // 音声解析のセットアップ（ハウリング防止のため出力はせず解析のみ）
         audioContext = new (window.AudioContext || window.webkitAudioContext)();
         const src = audioContext.createMediaStreamSource(stream);
         analyser = audioContext.createAnalyser(); 
         analyser.fftSize = 256; 
         src.connect(analyser); 
-        
         dataArray = new Uint8Array(analyser.frequencyBinCount);
         
-        // ... PeerJS等の処理 ...
+        // --- ここからが「略されていた」接続ロジックの復元 ---
         if (peer) peer.destroy();
-        peer = new Peer(); // 自分のIDは空でOK
-
-        peer.on('open', () => {
-          const targetId = roomIdInput.value; // Receiverが待機しているID
-          const c = peer.connect(targetId, { reliable: true });
-          
-          c.on('open', () => {
-            connections.push(c);
-            connStatus.innerText = "配信中 (Connected)";
-            document.getElementById("live_indicator").style.display = "block";
-          });
         
-            c.on('close', () => {
-                connections = connections.filter(x => x !== c);
-                connStatus.innerText = "切断されました";
-            });
+        // 最初に提示されたReceiverが「探しに来る」側なので、Senderは「待機(Listen)」モード
+        peer = new Peer(roomIdInput.value);
+
+        // 自分のIDが発行された（看板を掲げた）時の処理
+        peer.on('open', (id) => {
+          connStatus.innerText = "配信待機中: " + id;
+          connStatus.style.color = "#00ff00";
+          document.getElementById("live_indicator").style.display = "block";
+          console.log("Sender Ready: ID [" + id + "] で接続を待機しています...");
         });
 
-    } catch (e) { alert("デバイスの起動に失敗しました"); }
-};        
+        // Receiverが接続してきた時のハンドリング（ここが抜けていました）
+        peer.on('connection', (conn) => {
+          console.log("Receiverと接続を確立しました:", conn.peer);
+          
+          // 接続が確立(open)してからリストに追加する
+          conn.on('open', () => {
+            connections.push(conn);
+          });
+
+          // 切断されたらリストから除外する（メモリリーク・エラー防止）
+          conn.on('close', () => {
+            connections = connections.filter(c => c !== conn);
+            console.log("Receiverが切断されました");
+          });
+
+          conn.on('error', (err) => {
+            console.error("Connection Error:", err);
+            connections = connections.filter(c => c !== conn);
+          });
+        });
+
+        // Peer自体のエラー処理
+        peer.on('error', (err) => {
+          console.error("Peer Error Type:", err.type);
+          connStatus.innerText = "通信エラー: " + err.type;
+          connStatus.style.color = "#ff4444";
+        });
+
+      } catch (e) { 
+        alert("カメラ/マイクの起動に失敗しました。権限を確認してください。"); 
+      }
+    };
+    
             
     function animate() {
       requestAnimationFrame(animate);
