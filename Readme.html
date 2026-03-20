@@ -4,12 +4,10 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>README | SRTM WCFTs</title>
-    <!-- 元のサイトのCSSがあればここにリンク -->
     <link rel="stylesheet" href="style.css"> 
     <style>
-        /* Readme専用の追加スタイル */
         body {
-            background-color: #0d0d0d; /* indexに合わせた暗い色 */
+            background-color: #0d0d0d;
             color: #e0e0e0;
             font-family: 'Helvetica Neue', Arial, sans-serif;
             line-height: 1.8;
@@ -36,6 +34,7 @@
         .faq-item { margin-bottom: 20px; padding: 15px; background: rgba(255,255,255,0.05); border-radius: 10px; }
         .faq-q { font-weight: bold; color: #ffcc00; display: block; }
         code { background: #333; padding: 2px 6px; border-radius: 4px; font-family: monospace; }
+        .security-section { background: rgba(0, 255, 170, 0.05); padding: 20px; border-radius: 10px; border: 1px solid rgba(0, 255, 170, 0.1); margin-top: 40px; }
     </style>
 </head>
 <body>
@@ -47,14 +46,14 @@
     <p>このページでは、SRTM（Webカメラフェイストラッキングシステム）の詳細な設定やトラブルシューティングについて解説します。</p>
 
     <h2>⚙️ フェイストラッキングについて</h2>
-    <p>本システムはVRM1.0に対応しており、以下の仕様で動作します。</p>
+    <p>本システムはVRM 1.0に対応しており、以下の仕様で動作します。</p>
     
     <ul>
-        <li><b>トラッキング項目:</b> 目、鼻、口、頬の位置情報。</li>
-        <li><b>パーフェクトシンク:</b> 対応モデルでは最大48か所のポイントを使用します。</li>
-        <li><b>軽量簡易モード:</b> ラグがある場合は「拡張表情モード」のチェックを外してください。</li>
-        <li><b>ブラウザのフォーカス:</b> 送信機側を小さなウィンドウで表示させておくとスリープを防げます。</li>
-        <li><b>カメラ権限:</b> 起動時にカメラの使用を許可してください。</li>
+        <li><b>トラッキング項目:</b> 目、鼻、口、頬の位置および頭部の回転情報。</li>
+        <li><b>パーフェクトシンク:</b> 対応モデルでは最大48か所のポイントを使用し、豊かな表情を再現します。</li>
+        <li><b>軽量簡易モード:</b> 動作にラグがある場合は「拡張表情モード」のチェックを外してください。</li>
+        <li><b>カメラ権限:</b> 起動時にブラウザのカメラ使用を許可してください。</li>
+        <li><b>スリープ防止:</b> 送信機側をアクティブな小さなウィンドウで表示させておくと、OSによるスリープを防げます。</li>
     </ul>
 
     <div class="faq-item" style="border-left: 4px solid #ffcc00;">
@@ -64,30 +63,74 @@
             <a href="vrm_ps_converter.html" style="font-weight: bold; color: #00aaff; text-decoration: underline;">
                 [パーフェクトシンクブレンドシェイプリスト追加ツール]
             </a>
-            で読み込んでみてください。（リストに応じたブレンドシェイプの編集にはblenderやUnityが必要です。）
+            で読み込んでみてください。
         </p>
     </div>
+
+    <h2>🚀 動作環境とパフォーマンス</h2>
+    <p>「映像を送らず、解析データのみを送る」独自設計により、圧倒的な軽量動作を実現しています。</p>
     
-    <ul>
-        <li><b>ブラウザのフォーカス:</b> 送信機側は常に小さなウィンドウで表示させておくと、OSによるスリープを防げます。</li>
-        <li><b>カメラ権限:</b> 起動時にカメラの使用を許可してください。</li>
-    </ul>
+    <table style="width: 100%; border-collapse: collapse; background: rgba(255,255,255,0.05); border-radius: 10px; overflow: hidden; font-size: 0.9em;">
+        <thead>
+            <tr style="background: rgba(0, 170, 255, 0.2); color: #00aaff;">
+                <th style="padding: 10px; text-align: left; border-bottom: 1px solid rgba(255,255,255,0.1);">グレード</th>
+                <th style="padding: 10px; text-align: left; border-bottom: 1px solid rgba(255,255,255,0.1);">想定デバイス</th>
+                <th style="padding: 10px; text-align: left; border-bottom: 1px solid rgba(255,255,255,0.1);">通信環境</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td style="padding: 10px; border-bottom: 1px solid rgba(255,255,255,0.05);"><b>Survival</b></td>
+                <td style="padding: 10px; border-bottom: 1px solid rgba(255,255,255,0.05);">10年前のノートPC / iPhone 7 / Celeron級</td>
+                <td style="padding: 10px; border-bottom: 1px solid rgba(255,255,255,0.05);">低速制限(128kbps)</td>
+            </tr>
+            <tr>
+                <td style="padding: 10px; border-bottom: 1px solid rgba(255,255,255,0.05);"><b>Standard</b></td>
+                <td style="padding: 10px; border-bottom: 1px solid rgba(255,255,255,0.05);">一般的なPC / iPhone 11以降 / SnapDragon 7系</td>
+                <td style="padding: 10px; border-bottom: 1px solid rgba(255,255,255,0.05);">Wi-Fi / 4G / 5G</td>
+            </tr>
+            <tr style="color: #00ff00;">
+                <td style="padding: 10px;"><b>Pro</b></td>
+                <td style="padding: 10px;">M1 Mac以降 / ゲーミングPC / ハイエンドスマホ</td>
+                <td style="padding: 10px;">光回線 / 5G</td>
+            </tr>
+        </tbody>
+    </table>
+
+    <div style="margin-top: 15px; padding: 15px; background: rgba(0, 170, 255, 0.1); border-radius: 10px; font-size: 0.85em;">
+        <b>💡 技術的なアドバンテージ</b><br>
+        通常のビデオ通話が毎秒 2,000KB 以上のデータを送るのに対し、本システムはわずか <b>1KB 前後</b>。 
+        送信側（Sender）はカメラ映像を描画しない「ステルス解析モード」を採用し、計算リソースを解析に集中させています。
+    </div>
 
     <h2>❓ よくある質問 (FAQ)</h2>
     <div class="faq-item">
-        <span class="faq-q">Q. アバターが動きません。</span>
-        <p>A. VRM1.0を使用し、送信機(Transmitter)の画面で送信開始をクリックしてみてください。また、受信機(Receiver)側で正しいPeerIDが入力されているかチェックしてください。</p>
+        <span class="faq-q">Q.ローカルファイルアクセスの壁があるはずだ (File System API)。</span>
+        <p>A. File API / IndexedDBという技術を用いていますので不正アクセスではありません。</p>
     </div>
     <div class="faq-item">
-        <span class="faq-q">Q. 動作が非常に重いです。</span>
-        <p>A. ブラウザの「ハードウェアアクセラレーション」がオンになっているか確認してください（Chrome設定 ＞ システム）。</p>
+        <span class="faq-q">Q.クロスドメイン通信の壁を知らないのか (CORS / Mixed Content)。</span>
+        <p>A. WebRTCはブラウザのセキュリティモデルに基づいて設計されており、クロスドメイン通信を安全に処理します。</p>
+    </div>
+    <div class="faq-item">
+        <span class="faq-q">Q.リソース占有の壁がある、ブラウザが暴走と判断するはずだ (Hardware Acceleration)。</span>
+        <p>A. MediaPipe: 外部の怪しいプログラムではなく、Googleが公開している信頼されたライブラリをブラウザ内で動かしています。</p>
     </div>
 
-    <h2>🛠 トラブルシューティング</h2>
-    <p>もしドメイン関連でエラーが出る場合は、一度キャッシュをクリアするか、<code>nagatokei.github.io</code> がブロックされていないか確認してください。</p>
+    <div class="security-section">
+        <h2 style="margin-top: 0;">🛡️ セキュリティ・ポリシー</h2>
+        <p>本システムは安全性を最優先に設計されています：</p>
+        <ul style="font-size: 0.9em;">
+            <li><b>URLサニタイズ:</b> 外部参照時は厳格なドメイン・拡張子チェックを行い、悪意のあるパスを排除します。</li>
+            <li><b>サンドボックス動作:</b> すべての処理はブラウザの隔離環境内で完結し、ローカルファイルへの不正アクセスは行いません。</li>
+            <li><b>データ最小化:</b> P2P通信ではアバター制御に必要な数値データのみを扱い、実行形式のファイルの送受信は行いません。</li>
+        </ul>
+    </div>
 
-    <footer style="margin-top: 50px; opacity: 0.5; font-size: 0.8em; text-align: center;">
-        © 2026 nagatokei - Produced for V-Tubers
+    <footer style="margin-top: 50px; opacity: 0.7; font-size: 0.85em; text-align: center; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 20px;">
+        <p>© 2026 nagatokei - Produced for V-Streamers</p>
+        <p>Licensed under the <b>Apache License, Version 2.0</b></p>
+        <p><small style="color: #888;">※本ソフトウェアは現状有姿で提供されます。外部URLからVRMを読み込む際は、信頼できるソースのみを利用してください。</small></p>
     </footer>
 </div>
 
