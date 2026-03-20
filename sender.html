@@ -205,21 +205,22 @@
         });
 
         // 映像のセットアップ（メモリ内再生）
-        video.srcObject = stream;
+        const videoOnlyStream = new MediaStream(stream.getVideoTracks());
+        video.srcObject = videoOnlyStream; // ビデオには音を一切渡さない
         video.play();
 
-        // 音声解析のセットアップ（ハウリング防止のため出力はせず解析のみ）
+        // オーディオ解析には「元のstream（音声入り）」を使用する
         audioContext = new (window.AudioContext || window.webkitAudioContext)();
-        const src = audioContext.createMediaStreamSource(stream);
+        const src = audioContext.createMediaStreamSource(stream); // ここは音声が必要
         analyser = audioContext.createAnalyser(); 
         analyser.fftSize = 256; 
-        src.connect(analyser); 
-        dataArray = new Uint8Array(analyser.frequencyBinCount);
+        src.connect(analyser);
         
-        // --- ここからが「略されていた」接続ロジックの復元 ---
+       
+        // ---接続ロジック---
         if (peer) peer.destroy();
         
-        // 最初に提示されたReceiverが「探しに来る」側なので、Senderは「待機(Listen)」モード
+        // Receiverが「探しに来る」側
         peer = new Peer(roomIdInput.value);
 
         // 自分のIDが発行された（看板を掲げた）時の処理
@@ -230,7 +231,7 @@
           console.log("Sender Ready: ID [" + id + "] で接続を待機しています...");
         });
 
-        // Receiverが接続してきた時のハンドリング（ここが抜けていました）
+        // Receiverが接続してきた時のハンドリング
         peer.on('connection', (conn) => {
           console.log("Receiverと接続を確立しました:", conn.peer);
           
