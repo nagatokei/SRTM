@@ -286,7 +286,7 @@
                             const val = targetData.s[k];
                             if (k === "eyeBlinkLeft" || k === "eyeBlinkRight") {
                                 const vK = (k === "eyeBlinkLeft") ? "blinkLeft" : "blinkRight";
-                                const cur = safeGetExpression(exp, vK); safeSetExpression(exp, vK, cur + (Math.min(1.0, val * bSense) - cur) * lerpSpeed);
+                                const cur = safeGetExpression(exp, vK); safeSetExpression(exp, vK, cur + (Math.min(1.0, val * bSense) - cur) * mouthSpeed);
                             } else if (k === "jawOpen" || k === "aa") {
                                 const cur = safeGetExpression(exp, "aa"); safeSetExpression(exp, "aa", cur + (val - cur) * mouthSpeed); safeSetExpression(exp, "jawOpen", cur + (val - cur) * mouthSpeed);
                             } else if (!SKIP.has(k)) {
