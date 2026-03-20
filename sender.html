@@ -204,6 +204,10 @@
         const src = audioContext.createMediaStreamSource(stream);
         analyser = audioContext.createAnalyser(); analyser.fftSize = 256; src.connect(analyser);
         dataArray = new Uint8Array(analyser.frequencyBinCount);
+        const silencer = audioContext.createGain();
+        silencer.gain.value = 0; // 音量ゼロ
+        analyser.connect(silencer);
+        silencer.connect(audioContext.destination);
         
         if (peer) peer.destroy();
         peer = new Peer(roomIdInput.value);
