@@ -206,15 +206,19 @@
 
         // 映像のセットアップ（メモリ内再生）
         const videoOnlyStream = new MediaStream(stream.getVideoTracks());
-        video.srcObject = videoOnlyStream; // ビデオには音を一切渡さない
-        video.play();
+        video.srcObject = stream; 
+        video.muted = true; // 確実にミュート
+        video.volume = 0;   // 念のため音量ゼロ
+        video.play();;
 
         // オーディオ解析には「元のstream（音声入り）」を使用する
         audioContext = new (window.AudioContext || window.webkitAudioContext)();
-        const src = audioContext.createMediaStreamSource(stream); // ここは音声が必要
+        const src = audioContext.createMediaStreamSource(stream);
         analyser = audioContext.createAnalyser(); 
         analyser.fftSize = 256; 
-        src.connect(analyser);
+        src.connect(analyser); 
+        // ※ audioContext.destination に connect しないことでスピーカーへの出力を完全に防ぐ
+        dataArray = new Uint8Array(analyser.frequencyBinCount);
         
        
         // ---接続ロジック---
