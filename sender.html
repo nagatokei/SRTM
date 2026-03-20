@@ -220,7 +220,8 @@
         // ... PeerJS等の処理 ...
         if (peer) peer.destroy();
         peer = new Peer(roomIdInput.value);
-        // (以下略)
+        peer.on('open', id => { connStatus.innerText = "配信中: " + id; document.getElementById("live_indicator").style.display = "block"; });
+        peer.on('connection', conn => { conn.on('open', () => connections.push(conn)); });
       } catch (e) { alert("カメラ/マイク起動失敗"); }
     };
     
