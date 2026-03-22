@@ -135,7 +135,7 @@
             statusEl.innerText = "Loading VRM...";
             new GLTFLoader().register(p => new VRMLoaderPlugin(p)).load(url, gltf => {
                 if (currentVrm) scene.remove(currentVrm.scene);
-                currentVrm = gltf.userData.vrm; scene.add(gltf.scene); currentVrm.scene.scale.set(-1,1,1);
+                currentVrm = gltf.userData.vrm; scene.add(gltf.scene); currentVrm.scene.scale.set(1,1,1);
                 const ext = gltf.parser?.json?.extensions;
                 isVRM0 = !!ext?.VRM; vBadge.innerText = `VRM ${isVRM0 ? '0.x' : '1.0'}`; vBadge.className = isVRM0 ? 'badge-vrm0' : 'badge-vrm1';
                 modelHasPS = ['browDownLeft','cheekPuff','noseSneerLeft'].some(n => currentVrm.expressionManager.getExpression(n));
@@ -168,8 +168,10 @@
         // --- 4. Render Loop ---
         scene = new THREE.Scene(); camera = new THREE.PerspectiveCamera(30, window.innerWidth/window.innerHeight, 0.1, 20);
         renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, premultipliedAlpha: false });
+        renderer.outputColorSpace = THREE.SRGBColorSpace;
         renderer.setSize(window.innerWidth, window.innerHeight); renderer.setClearColor(0,0); document.body.appendChild(renderer.domElement);
-        const l = new THREE.DirectionalLight(0xffffff, Math.PI); l.position.set(0,0,1); camera.add(l); scene.add(camera, new THREE.AmbientLight(0xffffff, 0.5));
+        const l = new THREE.DirectionalLight(0xffffff, Math.PI); l.position.set(0,0,1); camera.add(l);
+        scene.add(camera, new THREE.AmbientLight(0xffffff, 0.5));
 
         function animate() {
             requestAnimationFrame(animate);
@@ -183,10 +185,10 @@
                 }
                 currentVrm.scene.position.y += (targetData.h - currentVrm.scene.position.y) * lerp;
                 const ns = Math.abs(currentVrm.scene.scale.x) + ((targetData.s_scale || 1.0) - Math.abs(currentVrm.scene.scale.x)) * lerp;
-                currentVrm.scene.scale.set(isVRM0 ? ns : -ns, ns, isVRM0 ? -ns : ns);
-                const aL = currentVrm.humanoid.getNormalizedBoneNode("leftUpperArm"), aR = currentVrm.humanoid.getNormalizedBoneNode("rightUpperArm");
-                if(aL) aL.rotation.z += (THREE.MathUtils.degToRad(targetData.la) - aL.rotation.z) * lerp;
-                if(aR) aR.rotation.z += (THREE.MathUtils.degToRad(-targetData.ra) - aR.rotation.z) * lerp;
+                currentVrm.scene.scale.set(ns, ns, ns);
+                const aL = currentVrm.humanoid.getNormalizedBoneNode("rightUpperArm"), aR = currentVrm.humanoid.getNormalizedBoneNode("leftUpperArm");
+                if(aL) aL.rotation.z += (THREE.MathUtils.degToRad(-targetData.la) - aL.rotation.z) * lerp;
+                if(aR) aR.rotation.z += (THREE.MathUtils.degToRad(targetData.ra) - aR.rotation.z) * lerp;
                 if (targetData.r) {
                     const h = currentVrm.humanoid.getNormalizedBoneNode("head"), n = currentVrm.humanoid.getNormalizedBoneNode("neck");
                     tempQuat.fromArray(targetData.r); halfQuat.set(0,0,0,1).slerp(tempQuat, 0.5);
@@ -198,7 +200,7 @@
                         const SKIP = new Set(['eyeBlinkLeft','eyeBlinkRight','eyeLookDownLeft','eyeLookDownRight','eyeLookInLeft','eyeLookInRight','eyeLookOutLeft','eyeLookOutRight','eyeLookUpLeft','eyeLookUpRight']);
                         Object.keys(targetData.s).forEach(k => {
                             const val = targetData.s[k];
-                            if (k.includes('eyeBlink')) { const vk = k.includes('Left') ? 'blinkLeft' : 'blinkRight'; exp.setValue(vk, exp.getValue(vk) + (Math.min(1.0, val * bS) - exp.getValue(vk)) * lerp); }
+                            if (k.includes('eyeBlink')) { const vk = k.includes('Left') ? 'blinkRight' : 'blinkLeft'; exp.setValue(vk, exp.getValue(vk) + (Math.min(1.0, val * bS) - exp.getValue(vk)) * lerp); }
                             else if (k === 'jawOpen' || k === 'aa') { exp.setValue('aa', exp.getValue('aa') + (val - exp.getValue('aa')) * mouth); exp.setValue('jawOpen', exp.getValue('aa')); }
                             else if (!SKIP.has(k)) { exp.setValue(k, (exp.getValue(k)||0) + (val - (exp.getValue(k)||0)) * lerp); }
                         });
@@ -210,9 +212,9 @@
                     if (lE && rE) {
                         const s = targetData.s, mp = 0.174, my = 0.122;
                         lE.rotation.x += (((s.eyeLookDownLeft||0)-(s.eyeLookUpLeft||0))*mp - lE.rotation.x) * lerp;
-                        lE.rotation.y += (((s.eyeLookOutLeft||0)-(s.eyeLookInLeft||0))*my - lE.rotation.y) * lerp;
+                        lE.rotation.y += (((s.eyeLookOutLeft||0)-(s.eyeLookInLeft||0))*-my - lE.rotation.y) * lerp;
                         rE.rotation.x += (((s.eyeLookDownRight||0)-(s.eyeLookUpRight||0))*mp - rE.rotation.x) * lerp;
-                        rE.rotation.y += (((s.eyeLookInRight||0)-(s.eyeLookOutRight||0))*my - rE.rotation.y) * lerp;
+                        rE.rotation.y += (((s.eyeLookInRight||0)-(s.eyeLookOutRight||0))*-my - rE.rotation.y) * lerp;
                     }
                 }
                 currentVrm.update(0.016);
