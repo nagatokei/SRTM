@@ -1,0 +1,652 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VRM Structure Analyzer</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body { margin: 0; overflow: hidden; background-color: #0a0a0f; color: #e0e0e0; font-family: 'Segoe UI', sans-serif; }
+        
+        /* 左右ペインのレイアウト */
+        #app-container { display: flex; width: 100vw; height: 100vh; }
+        #canvas-container { flex: 1; position: relative; background: #1a202c; }
+        #panel-container { width: 50%; max-width: 600px; height: 100%; overflow-y: auto; background: #0a0a0f; border-left: 1px solid #333; position: relative; }
+        
+        /* ドラッグ＆ドロップオーバーレイ */
+        #drop-overlay {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(30, 58, 138, 0.5); border: 4px dashed #60a5fa;
+            display: none; justify-content: center; align-items: center; z-index: 50;
+            backdrop-filter: blur(4px);
+        }
+        #drop-overlay.active { display: flex; }
+
+        /* 解析パネルのスタイル */
+        .analyzer-content { padding: 30px 20px; }
+        .section { background: #111118; border: 1px solid #222; border-radius: 10px; padding: 20px; margin-bottom: 20px; }
+        .section-title { font-size: 14px; font-weight: bold; color: #60a5fa; margin-bottom: 12px; display: flex; align-items: center; gap: 8px; }
+        
+        .meta-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 10px; }
+        .meta-item { background: #181822; padding: 10px 12px; border-radius: 6px; }
+        .meta-item .key { font-size: 10px; color: #666; text-transform: uppercase; letter-spacing: 0.5px; }
+        .meta-item .val { font-size: 13px; color: #fff; margin-top: 3px; word-break: break-all; }
+        
+        table { width: 100%; border-collapse: collapse; font-size: 12px; table-layout: fixed; }
+        th { text-align: left; padding: 8px 10px; background: #181822; color: #888; border-bottom: 1px solid #2a2a3a; font-size: 10px; text-transform: uppercase; }
+        td { padding: 7px 10px; border-bottom: 1px solid #1a1a25; font-family: Consolas, monospace; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        tr:hover td { background: #151520; }
+        
+        .tag { display: inline-block; padding: 2px 7px; border-radius: 4px; font-size: 10px; font-weight: bold; margin: 1px; }
+        .tag-ok { background: #1a3a1a; color: #4ade80; }
+        .tag-warn { background: #3a3a1a; color: #fbbf24; }
+        .tag-err { background: #3a1a1a; color: #f87171; }
+        .tag-info { background: #1e3a8a; color: #93c5fd; }
+        
+        .bone-warn { background-color: rgba(248, 113, 113, 0.1); }
+        .bone-warn td { color: #f87171; }
+
+        /* 行のクリッカブル＆選択スタイル */
+        .clickable-row { cursor: pointer; transition: 0.2s; border-left: 3px solid transparent; }
+        .clickable-row:hover { background: #1f2937 !important; }
+        .clickable-row.selected-bone { background-color: rgba(59, 130, 246, 0.2) !important; border-left: 3px solid #3b82f6; }
+        .clickable-row.selected-collider { background-color: rgba(45, 212, 191, 0.2) !important; border-left: 3px solid #2dd4bf; }
+
+        .progress-bar { width: 100%; height: 20px; background: #181822; border-radius: 10px; overflow: hidden; margin: 10px 0; }
+        .progress-fill { height: 100%; transition: width 0.5s; display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: bold; }
+        
+        .arkit-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 6px; margin-top: 1rem; }
+        .arkit-item { padding: 4px 8px; border-radius: 4px; font-size: 10px; display: flex; justify-content: space-between; align-items: center; font-family: Consolas, monospace; }
+        .arkit-item.exists { background: #1a3a1a; color: #4ade80; border: 1px solid #22c55e40; }
+        .arkit-item.missing { background: #2a1a1a; color: #666; border: 1px solid #333; }
+        
+        /* カスタムスクロールバー */
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: #0a0a0f; }
+        ::-webkit-scrollbar-thumb { background: #333; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #555; }
+    </style>
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+                "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/",
+                "@pixiv/three-vrm": "https://unpkg.com/@pixiv/three-vrm@3.1.2/lib/three-vrm.module.js"
+            }
+        }
+    </script>
+</head>
+<body>
+
+    <div id="drop-overlay">
+        <div class="text-4xl font-bold text-blue-300 drop-shadow-md bg-gray-900 p-8 rounded-2xl border border-blue-500 shadow-2xl">
+            📁 解析するVRMファイルをドロップ
+        </div>
+    </div>
+
+    <div id="app-container">
+        <!-- 3Dプレビュー領域 -->
+        <div id="canvas-container">
+            <!-- 凡例 -->
+            <div class="absolute top-4 left-4 bg-gray-800 bg-opacity-80 px-4 py-3 rounded-lg text-sm text-gray-200 pointer-events-none z-10 border border-gray-600 shadow-lg">
+                <div class="font-bold text-white mb-2 border-b border-gray-600 pb-1">3D Viewer Helpers</div>
+                <div class="flex items-center gap-2 mb-1"><span class="w-3 h-3 bg-red-500 rounded-sm inline-block"></span> X軸 (Right)</div>
+                <div class="flex items-center gap-2 mb-1"><span class="w-3 h-3 bg-green-500 rounded-sm inline-block"></span> Y軸 (Up)</div>
+                <div class="flex items-center gap-2 mb-2"><span class="w-3 h-3 bg-blue-500 rounded-sm inline-block"></span> Z軸 (Back)</div>
+                <div class="flex items-center gap-2 pt-2 border-t border-gray-600"><span class="w-3 h-3 bg-teal-400 rounded-full inline-block opacity-70"></span> コライダー (当たり判定)</div>
+                <div class="mt-3 text-xs text-blue-300">※右リストの行をクリックで表示切替</div>
+            </div>
+
+            <div class="absolute bottom-4 left-4 bg-gray-800 bg-opacity-70 px-4 py-2 rounded-lg text-sm text-gray-300 pointer-events-none z-10">
+                左ドラッグ: 回転 | 右ドラッグ: 移動 | ホイール: ズーム
+            </div>
+        </div>
+
+        <!-- 解析結果パネル -->
+        <div id="panel-container">
+            <div class="analyzer-content">
+                <h1 class="text-2xl font-bold text-blue-400 mb-1 flex items-center gap-2">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z"></path></svg>
+                    VRM Structure Analyzer
+                </h1>
+                <p class="text-xs text-gray-500 mb-8">VRMモデルの内部構造（ボーン・マテリアル・揺れ物）を解析します</p>
+
+                <div id="initial-state" class="border-2 border-dashed border-gray-700 rounded-xl p-12 text-center text-gray-500 hover:border-gray-500 hover:text-gray-400 transition-colors cursor-pointer">
+                    <div class="text-5xl mb-4">🔍</div>
+                    <p class="mb-2">解析待ち</p>
+                    <p class="text-xs">画面のどこかに .vrm ファイルをドロップしてください</p>
+                </div>
+
+                <div id="results-state" class="hidden">
+                    <!-- 基本情報 -->
+                    <div class="section">
+                        <div class="section-title">📋 基本メタデータ</div>
+                        <div class="meta-grid" id="metaGrid"></div>
+                    </div>
+
+                    <!-- ボーン正規化 -->
+                    <div class="section">
+                        <div class="section-title">
+                            🦴 ボーン初期Transform解析 (Rest Pose)
+                            <span class="ml-auto text-xs font-normal text-gray-400" id="bone-status-text">判定中...</span>
+                        </div>
+                        <div class="max-h-48 overflow-y-auto">
+                            <table id="boneTable">
+                                <thead>
+                                    <tr>
+                                        <th style="width: 35%;">Bone Name</th>
+                                        <th style="width: 35%;">Rotation (X, Y, Z)</th>
+                                        <th style="width: 30%;">Status</th>
+                                    </tr>
+                                </thead>
+                                <tbody></tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- ★新機能：マテリアル解析 -->
+                    <div class="section">
+                        <div class="section-title">🎨 マテリアル＆テクスチャ解析</div>
+                        <div class="max-h-48 overflow-y-auto">
+                            <table id="materialTable">
+                                <thead>
+                                    <tr>
+                                        <th style="width: 40%;">Material Name</th>
+                                        <th style="width: 30%;">Shader</th>
+                                        <th style="width: 15%;">2-Sided</th>
+                                        <th style="width: 15%;">Alpha</th>
+                                    </tr>
+                                </thead>
+                                <tbody></tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- ★新機能：揺れ物・コライダー解析 -->
+                    <div class="section">
+                        <div class="section-title">💨 揺れ物 (SpringBone) 解析</div>
+                        <div class="max-h-40 overflow-y-auto mb-6">
+                            <table id="springTable">
+                                <thead>
+                                    <tr>
+                                        <th style="width: 30%;">Group Name</th>
+                                        <th style="width: 15%;">Joints</th>
+                                        <th style="width: 55%;">Affected Bones</th>
+                                    </tr>
+                                </thead>
+                                <tbody></tbody>
+                            </table>
+                        </div>
+                        
+                        <div class="section-title">
+                            🟢 コライダー (当たり判定) 解析
+                            <span class="ml-auto text-xs font-normal text-teal-400 border border-teal-400 px-2 py-1 rounded">※行クリックで3D表示</span>
+                        </div>
+                        <div class="max-h-48 overflow-y-auto">
+                            <table id="colliderTable">
+                                <thead>
+                                    <tr>
+                                        <th style="width: 40%;">Target Bone</th>
+                                        <th style="width: 30%;">Shape</th>
+                                        <th style="width: 30%;">Radius</th>
+                                    </tr>
+                                </thead>
+                                <tbody></tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- パーフェクトシンク -->
+                    <div class="section">
+                        <div class="section-title">🎯 パーフェクトシンク (ARKit 52) 対応状況</div>
+                        <div id="psSummary"></div>
+                        <div class="progress-bar">
+                            <div class="progress-fill" id="psProgress"></div>
+                        </div>
+                        <div class="arkit-grid" id="arkitGrid"></div>
+                    </div>
+
+                    <!-- ★新機能：AI診断セクション -->
+                    <div class="section border-blue-900 border-2">
+                        <div class="section-title text-blue-300">
+                            ✨ AIアシスタントによるVRM健康診断
+                        </div>
+                        <p class="text-xs text-gray-400 mb-4">
+                            解析した内部データをGemini APIに送信し、このモデルの総合的な状態や、メタバースでの利用に向けた専門的なアドバイスを生成します。
+                        </p>
+                        <button id="ai-report-btn" class="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 px-4 rounded-lg transition-colors flex justify-center items-center gap-2">
+                            ✨ AI健康診断レポートを作成する
+                        </button>
+                        <div id="ai-loading" class="hidden mt-4 text-center text-blue-400 text-sm">
+                            <svg class="animate-spin -ml-1 mr-3 h-5 w-5 text-blue-400 inline" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                            AIがモデルを診断中...
+                        </div>
+                        <div id="ai-report-content" class="hidden mt-4 p-5 bg-gray-900 rounded-lg text-sm text-gray-200 leading-relaxed whitespace-pre-wrap border border-gray-700">
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+        import { VRMLoaderPlugin } from '@pixiv/three-vrm';
+
+        const ARKIT_BLENDSHAPES = [
+            'eyeBlinkLeft', 'eyeLookDownLeft', 'eyeLookInLeft', 'eyeLookOutLeft', 'eyeLookUpLeft', 'eyeSquintLeft', 'eyeWideLeft',
+            'eyeBlinkRight', 'eyeLookDownRight', 'eyeLookInRight', 'eyeLookOutRight', 'eyeLookUpRight', 'eyeSquintRight', 'eyeWideRight',
+            'jawForward', 'jawLeft', 'jawRight', 'jawOpen',
+            'mouthClose', 'mouthFunnel', 'mouthPucker', 'mouthLeft', 'mouthRight',
+            'mouthSmileLeft', 'mouthSmileRight', 'mouthFrownLeft', 'mouthFrownRight',
+            'mouthDimpleLeft', 'mouthDimpleRight', 'mouthStretchLeft', 'mouthStretchRight',
+            'mouthRollLower', 'mouthRollUpper', 'mouthShrugLower', 'mouthShrugUpper',
+            'mouthPressLeft', 'mouthPressRight',
+            'noseSneerLeft', 'noseSneerRight',
+            'cheekPuff', 'cheekSquintLeft', 'cheekSquintRight',
+            'browDownLeft', 'browDownRight', 'browInnerUp', 'browOuterUpLeft', 'browOuterUpRight',
+            'tongueOut'
+        ];
+
+        // --- 1. Three.js セットアップ ---
+        const container = document.getElementById('canvas-container');
+        const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+        renderer.setSize(container.clientWidth, container.clientHeight);
+        renderer.setPixelRatio(window.devicePixelRatio);
+        container.appendChild(renderer.domElement);
+
+        const camera = new THREE.PerspectiveCamera(30, container.clientWidth / container.clientHeight, 0.1, 20);
+        camera.position.set(0, 1.2, 3);
+
+        const scene = new THREE.Scene();
+        
+        const light = new THREE.DirectionalLight(0xffffff, Math.PI);
+        light.position.set(1, 1, 1).normalize();
+        scene.add(light);
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
+        scene.add(ambientLight);
+
+        const gridHelper = new THREE.GridHelper(5, 10, 0x444444, 0x222222);
+        scene.add(gridHelper);
+
+        const controls = new OrbitControls(camera, renderer.domElement);
+        controls.target.set(0, 1.0, 0);
+        controls.update();
+
+        const clock = new THREE.Clock();
+        let currentVrm = null;
+        let vrmAnalysisData = {}; // ★ AIに渡すための解析データ保持用
+
+        function animate() {
+            requestAnimationFrame(animate);
+            const deltaTime = clock.getDelta();
+            if (currentVrm) currentVrm.update(deltaTime);
+            renderer.render(scene, camera);
+        }
+        animate();
+
+        window.addEventListener('resize', () => {
+            camera.aspect = container.clientWidth / container.clientHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(container.clientWidth, container.clientHeight);
+        });
+
+        // --- 2. ファイル読み込み ---
+        const loader = new GLTFLoader();
+        loader.register((parser) => new VRMLoaderPlugin(parser));
+
+        function loadAndAnalyzeVRM(url, file) {
+            document.getElementById('initial-state').classList.add('hidden');
+            document.getElementById('results-state').classList.remove('hidden');
+
+            loader.load(url, (gltf) => {
+                try {
+                    const vrm = gltf.userData.vrm;
+                    if (!vrm) throw new Error("VRMデータの取得に失敗しました。");
+
+                    if (currentVrm) {
+                        scene.remove(currentVrm.scene);
+                        currentVrm.scene.traverse((obj) => {
+                            if (obj.geometry) obj.geometry.dispose();
+                            if (obj.material) {
+                                if (Array.isArray(obj.material)) obj.material.forEach(m => m.dispose());
+                                else obj.material.dispose();
+                            }
+                        });
+                    }
+
+                    currentVrm = vrm;
+                    scene.add(vrm.scene);
+
+                    const head = vrm.humanoid?.getNormalizedBoneNode('head');
+                    if (head) {
+                        const headPos = new THREE.Vector3();
+                        head.getWorldPosition(headPos);
+                        controls.target.set(0, headPos.y - 0.2, 0);
+                        camera.position.set(0, headPos.y, 2.5);
+                        controls.update();
+                    }
+
+                    analyzeVrmStructure(gltf, vrm, file);
+                } catch (e) {
+                    console.error("解析エラー:", e);
+                    alert(`モデルの解析中にエラーが発生しました。\n詳細: ${e.message}`);
+                    document.getElementById('initial-state').classList.remove('hidden');
+                    document.getElementById('results-state').classList.add('hidden');
+                }
+
+            }, undefined, (error) => {
+                alert(`読み込みエラー: ${error.message}`);
+                document.getElementById('initial-state').classList.remove('hidden');
+                document.getElementById('results-state').classList.add('hidden');
+            });
+        }
+
+        // --- 3. 解析ロジック ---
+        function analyzeVrmStructure(gltf, vrm, file) {
+            const rawJson = gltf.parser.json || {};
+            vrmAnalysisData = { fileName: file.name, fileSize: (file.size / 1024 / 1024).toFixed(2) + ' MB' };
+            
+            // 【1. メタデータ】
+            const meta = [];
+            meta.push({ key: 'File Name', val: file.name });
+            meta.push({ key: 'File Size', val: (file.size / 1024 / 1024).toFixed(2) + ' MB' });
+            
+            const metaVersion = vrm.meta?.metaVersion || 'Unknown';
+            if (metaVersion === '0') {
+                meta.push({ key: 'VRM Version', val: '<span class="tag tag-warn">0.0</span>' });
+                meta.push({ key: 'Title', val: vrm.meta?.title || 'Unknown' });
+                meta.push({ key: 'Author', val: vrm.meta?.author || 'Unknown' });
+            } else if (metaVersion === '1') {
+                meta.push({ key: 'VRM Version', val: '<span class="tag tag-ok">1.0</span>' });
+                meta.push({ key: 'Name', val: vrm.meta?.name || 'Unknown' });
+                meta.push({ key: 'Authors', val: (vrm.meta?.authors || []).join(', ') });
+            } else {
+                meta.push({ key: 'VRM Version', val: `<span class="tag tag-err">${metaVersion}</span>` });
+            }
+            document.getElementById('metaGrid').innerHTML = meta.map(m => `<div class="meta-item"><div class="key">${m.key}</div><div class="val" title="${(m.val || '').replace(/<[^>]*>?/gm, '')}">${m.val}</div></div>`).join('');
+            vrmAnalysisData.meta = meta.map(m => ({ key: m.key, val: (m.val || '').replace(/<[^>]*>?/gm, '') }));
+
+            // 【2. ボーン正規化解析】
+            const tbodyBone = document.querySelector('#boneTable tbody');
+            tbodyBone.innerHTML = '';
+            let unnormalizedCount = 0;
+            const RAD2DEG = 180 / Math.PI;
+
+            const humanBones = vrm.humanoid?.humanBones || {};
+            Object.entries(humanBones).forEach(([boneName, boneObj]) => {
+                const node = boneObj?.node;
+                if (!node) return;
+
+                const axesHelper = new THREE.AxesHelper(0.2);
+                axesHelper.visible = false;
+                axesHelper.material.depthTest = false;
+                axesHelper.renderOrder = 1; 
+                node.add(axesHelper);
+
+                const rx = (node.rotation.x * RAD2DEG).toFixed(2);
+                const ry = (node.rotation.y * RAD2DEG).toFixed(2);
+                const rz = (node.rotation.z * RAD2DEG).toFixed(2);
+
+                const isNormalized = Math.abs(node.rotation.x) < 0.001 && Math.abs(node.rotation.y) < 0.001 && Math.abs(node.rotation.z) < 0.001;
+                if (!isNormalized) unnormalizedCount++;
+
+                const tr = document.createElement('tr');
+                tr.className = 'clickable-row';
+                if (!isNormalized) tr.classList.add('bone-warn');
+                
+                tr.innerHTML = `
+                    <td>${boneName}</td>
+                    <td>${rx}, ${ry}, ${rz}</td>
+                    <td>${isNormalized ? '<span class="tag tag-ok">OK</span>' : '<span class="tag tag-err">Warn</span>'}</td>
+                `;
+
+                tr.addEventListener('click', () => {
+                    axesHelper.visible = !axesHelper.visible;
+                    tr.classList.toggle('selected-bone', axesHelper.visible);
+                });
+                tbodyBone.appendChild(tr);
+            });
+
+            const boneStatusText = document.getElementById('bone-status-text');
+            if (unnormalizedCount === 0) boneStatusText.innerHTML = '<span class="tag tag-ok">✅ 全て正規化済</span>';
+            else boneStatusText.innerHTML = `<span class="tag tag-err">⚠️ ${unnormalizedCount}個のボーンに回転あり</span>`;
+            vrmAnalysisData.unnormalizedBoneCount = unnormalizedCount;
+
+            // 【3. マテリアル解析】
+            const tbodyMat = document.querySelector('#materialTable tbody');
+            tbodyMat.innerHTML = '';
+            const materials = rawJson.materials || [];
+            const vrm0MatProps = rawJson.extensions?.VRM?.materialProperties || [];
+
+            materials.forEach((mat, i) => {
+                let shader = 'PBR Standard';
+                let isMToon = false;
+                
+                if (mat.extensions && mat.extensions.VRMC_materials_mtoon) {
+                    shader = 'MToon 1.0';
+                    isMToon = true;
+                } else {
+                    const prop = vrm0MatProps.find(p => p.name === mat.name);
+                    if (prop && prop.shader === 'VRM/MToon') {
+                        shader = 'MToon (VRM0)';
+                        isMToon = true;
+                    } else if (prop) {
+                        shader = prop.shader; // Unlitなど
+                    }
+                }
+                
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td title="${mat.name || ''}">${mat.name || `Material_${i}`}</td>
+                    <td><span class="tag ${isMToon ? 'tag-ok' : 'tag-warn'}">${shader}</span></td>
+                    <td>${mat.doubleSided ? 'Yes' : 'No'}</td>
+                    <td>${mat.alphaMode || 'OPAQUE'}</td>
+                `;
+                tbodyMat.appendChild(tr);
+            });
+            vrmAnalysisData.materialCount = materials.length;
+            vrmAnalysisData.hasMToon = materials.some(m => m.extensions?.VRMC_materials_mtoon || vrm0MatProps.find(p => p.name === m.name)?.shader === 'VRM/MToon');
+
+            // 【4. 揺れ物 (SpringBone) 解析】
+            const tbodySpring = document.querySelector('#springTable tbody');
+            tbodySpring.innerHTML = '';
+            
+            if (vrm.springBoneManager?.springs && vrm.springBoneManager.springs.length > 0) {
+                vrm.springBoneManager.springs.forEach((spring, i) => {
+                    const jointNodes = (spring.joints || []).map(j => j.node?.name || 'Unknown Node');
+                    let jointsText = jointNodes.join(', ');
+                    
+                    const tr = document.createElement('tr');
+                    tr.innerHTML = `
+                        <td title="${spring.name || ''}">${spring.name || `SpringGroup_${i}`}</td>
+                        <td><span class="tag tag-info">${jointNodes.length}</span></td>
+                        <td title="${jointsText}">${jointsText}</td>
+                    `;
+                    tbodySpring.appendChild(tr);
+                });
+                vrmAnalysisData.springBoneGroups = vrm.springBoneManager.springs.length;
+            } else {
+                tbodySpring.innerHTML = '<tr><td colspan="3" class="text-center text-gray-500 py-4">揺れ物の設定が見つかりません</td></tr>';
+                vrmAnalysisData.springBoneGroups = 0;
+            }
+
+            // 【5. コライダー解析 & 3D可視化】
+            const tbodyCol = document.querySelector('#colliderTable tbody');
+            tbodyCol.innerHTML = '';
+
+            if (vrm.springBoneManager?.colliders && vrm.springBoneManager.colliders.length > 0) {
+                vrm.springBoneManager.colliders.forEach((collider, i) => {
+                    if (!collider.node) return; // 安全対策
+
+                    // 3Dビュー用ヘルパーの生成 (球体またはカプセル)
+                    const helperGroup = new THREE.Group();
+                    helperGroup.visible = false;
+                    
+                    const shape = collider.shape || {};
+                    const radius = shape.radius || 0.05;
+                    const mat = new THREE.MeshBasicMaterial({ color: 0x2dd4bf, wireframe: true, transparent: true, opacity: 0.6, depthTest: false });
+                    
+                    if (shape.type === 'sphere') {
+                        const mesh = new THREE.Mesh(new THREE.SphereGeometry(radius, 16, 16), mat);
+                        if (shape.offset) mesh.position.copy(shape.offset);
+                        helperGroup.add(mesh);
+                    } else if (shape.type === 'capsule') {
+                        const mesh1 = new THREE.Mesh(new THREE.SphereGeometry(radius, 16, 16), mat);
+                        if (shape.offset) mesh1.position.copy(shape.offset);
+                        const mesh2 = new THREE.Mesh(new THREE.SphereGeometry(radius, 16, 16), mat);
+                        if (shape.tail) mesh2.position.copy(shape.tail);
+                        helperGroup.add(mesh1);
+                        helperGroup.add(mesh2);
+                        // カプセルの軸線を描画
+                        if (shape.offset && shape.tail) {
+                            const line = new THREE.Line(new THREE.BufferGeometry().setFromPoints([shape.offset, shape.tail]), new THREE.LineBasicMaterial({color: 0x2dd4bf, depthTest: false}));
+                            helperGroup.add(line);
+                        }
+                    }
+
+                    // ボーンノードにヘルパーを追加
+                    collider.node.add(helperGroup);
+
+                    // UI側の生成
+                    const tr = document.createElement('tr');
+                    tr.className = 'clickable-row';
+                    tr.innerHTML = `
+                        <td>${collider.node.name || 'Unknown Bone'}</td>
+                        <td><span class="tag tag-info">${shape.type || 'unknown'}</span></td>
+                        <td>${radius.toFixed(3)}</td>
+                    `;
+
+                    // クリックで表示トグル
+                    tr.addEventListener('click', () => {
+                        helperGroup.visible = !helperGroup.visible;
+                        tr.classList.toggle('selected-collider', helperGroup.visible);
+                    });
+
+                    tbodyCol.appendChild(tr);
+                });
+                vrmAnalysisData.colliderCount = vrm.springBoneManager.colliders.length;
+            } else {
+                tbodyCol.innerHTML = '<tr><td colspan="3" class="text-center text-gray-500 py-4">コライダーが設定されていません</td></tr>';
+                vrmAnalysisData.colliderCount = 0;
+            }
+
+            // 【6. パーフェクトシンク対応解析】
+            const allMorphNames = new Set();
+            const customExpNames = new Set();
+            if (rawJson.meshes) {
+                rawJson.meshes.forEach(mesh => {
+                    if (mesh.extras && mesh.extras.targetNames) mesh.extras.targetNames.forEach(n => allMorphNames.add(n));
+                    else if (mesh.primitives && mesh.primitives[0] && mesh.primitives[0].extras && mesh.primitives[0].extras.targetNames) mesh.primitives[0].extras.targetNames.forEach(n => allMorphNames.add(n));
+                });
+            }
+            const vrm1Ext = rawJson.extensions?.VRMC_vrm;
+            const vrm0Ext = rawJson.extensions?.VRM;
+            if (vrm1Ext && vrm1Ext.expressions && vrm1Ext.expressions.custom) Object.keys(vrm1Ext.expressions.custom).forEach(name => customExpNames.add(name));
+            else if (vrm0Ext && vrm0Ext.blendShapeMaster && vrm0Ext.blendShapeMaster.blendShapeGroups) vrm0Ext.blendShapeMaster.blendShapeGroups.forEach(g => { if (!g.presetName) customExpNames.add(g.name); });
+
+            const foundArkit = [];
+            ARKIT_BLENDSHAPES.forEach(name => { if (allMorphNames.has(name) || customExpNames.has(name)) foundArkit.push(name); });
+            const psPercent = Math.round((foundArkit.length / ARKIT_BLENDSHAPES.length) * 100);
+            
+            document.getElementById('psSummary').innerHTML = `<div class="text-xs mb-2 text-gray-400">ARKit 52ブレンドシェイプ中 <b class="text-green-400 text-sm">${foundArkit.length}</b> 個が存在</div>`;
+            const psProgress = document.getElementById('psProgress');
+            psProgress.style.width = psPercent + '%';
+            psProgress.style.background = psPercent === 100 ? '#22c55e' : psPercent > 50 ? '#eab308' : '#ef4444';
+            
+            document.getElementById('arkitGrid').innerHTML = ARKIT_BLENDSHAPES.map(name => `<div class="arkit-item ${foundArkit.includes(name) ? 'exists' : 'missing'}"><span>${name}</span></div>`).join('');
+            vrmAnalysisData.perfectSyncDetected = foundArkit.length;
+            
+            // AIレポートUIのリセット
+            document.getElementById('ai-report-content').classList.add('hidden');
+            document.getElementById('ai-report-content').innerHTML = '';
+            document.getElementById('ai-report-btn').disabled = false;
+        }
+
+        // --- ★ 新機能：Gemini API 連携ロジック ---
+        async function fetchWithRetry(url, options, maxRetries = 5) {
+            const delays = [1000, 2000, 4000, 8000, 16000];
+            for (let i = 0; i < maxRetries; i++) {
+                try {
+                    const response = await fetch(url, options);
+                    if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+                    return await response.json();
+                } catch (error) {
+                    if (i === maxRetries - 1) throw error;
+                    await new Promise(resolve => setTimeout(resolve, delays[i]));
+                }
+            }
+        }
+
+        document.getElementById('ai-report-btn').addEventListener('click', async () => {
+            const btn = document.getElementById('ai-report-btn');
+            const loading = document.getElementById('ai-loading');
+            const content = document.getElementById('ai-report-content');
+            
+            btn.disabled = true;
+            loading.classList.remove('hidden');
+            content.classList.add('hidden');
+            
+            const apiKey = ""; // 実行環境から提供される
+            const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`;
+            
+            const prompt = `あなたは3DアバターとVRMモデルの専門家です。以下のVRMモデルの内部構造の解析データをもとに、このアバターの「健康診断レポート」を作成してください。
+出力はMarkdown形式で、読みやすく簡潔にまとめてください。以下の要素を含めてください。
+1. **総合評価**: このモデルの出来栄えや特徴の一言まとめ
+2. **長所**: マテリアルの設定、揺れ物の多さ、パーフェクトシンク対応など、優れている点
+3. **技術的な注意点・改善案**: もしボーンの正規化エラー（回転が含まれている）があれば、それがメタバース等でどういう不具合（例: 目や手足が変な方向に曲がる）を起こすか解説し、BlenderやUnity等での修正を促してください。
+4. **利用シーンのアドバイス**: このモデルがどんな用途（VRSNS、配信用など）に向いているか
+
+【VRM解析データ】
+${JSON.stringify(vrmAnalysisData, null, 2)}`;
+
+            try {
+                const result = await fetchWithRetry(url, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        contents: [{ parts: [{ text: prompt }] }]
+                    })
+                });
+                
+                const text = result.candidates?.[0]?.content?.parts?.[0]?.text || "レポートを生成できませんでした。";
+                
+                // 簡易Markdownレンダリング
+                const formattedText = text
+                    .replace(/^### (.*$)/gim, '<h3 class="text-lg font-bold text-blue-300 mt-5 mb-2">$1</h3>')
+                    .replace(/^## (.*$)/gim, '<h2 class="text-xl font-bold text-blue-400 mt-6 mb-3 border-b border-gray-700 pb-1">$1</h2>')
+                    .replace(/\*\*(.*?)\*\*/g, '<b class="text-white">$1</b>')
+                    .replace(/\*(.*?)\*/g, '<i class="text-gray-300">$1</i>')
+                    .replace(/\n/g, '<br>');
+                
+                content.innerHTML = formattedText;
+                content.classList.remove('hidden');
+            } catch (error) {
+                content.innerHTML = `<span class="text-red-400">エラーが発生しました: ${error.message}</span>`;
+                content.classList.remove('hidden');
+            } finally {
+                loading.classList.add('hidden');
+                btn.disabled = false;
+            }
+        });
+
+        // --- イベント ---
+        const dropOverlay = document.getElementById('drop-overlay');
+        window.addEventListener('dragover', (e) => { e.preventDefault(); dropOverlay.classList.add('active'); });
+        window.addEventListener('dragleave', (e) => { e.preventDefault(); if (e.relatedTarget === null || e.relatedTarget.nodeName === 'HTML') dropOverlay.classList.remove('active'); });
+        window.addEventListener('drop', (e) => {
+            e.preventDefault(); dropOverlay.classList.remove('active');
+            if (e.dataTransfer.files.length > 0 && e.dataTransfer.files[0].name.toLowerCase().endsWith('.vrm')) loadAndAnalyzeVRM(URL.createObjectURL(e.dataTransfer.files[0]), e.dataTransfer.files[0]);
+        });
+        
+        document.getElementById('initial-state').addEventListener('click', () => {
+             const input = document.createElement('input'); input.type = 'file'; input.accept = '.vrm';
+             input.onchange = (e) => { if(e.target.files[0]) loadAndAnalyzeVRM(URL.createObjectURL(e.target.files[0]), e.target.files[0]); };
+             input.click();
+        });
+
+    </script>
+</body>
+</html>

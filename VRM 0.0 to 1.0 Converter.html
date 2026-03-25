@@ -1,0 +1,391 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VRM 0.0 to 1.0 Advanced Converter</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body { background-color: #0f172a; color: #f8fafc; font-family: 'Segoe UI', sans-serif; min-height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 20px; }
+        
+        .container { max-width: 800px; width: 100%; background: #1e293b; border-radius: 16px; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5); overflow: hidden; border: 1px solid #334155; }
+        
+        .header { background: linear-gradient(to right, #2563eb, #7c3aed); padding: 24px; text-align: center; }
+        .header h1 { margin: 0; font-size: 24px; font-weight: bold; color: white; display: flex; align-items: center; justify-content: center; gap: 10px; }
+        
+        .content { padding: 32px; }
+        
+        .drop-zone { border: 2px dashed #475569; border-radius: 12px; padding: 48px 24px; text-align: center; cursor: pointer; transition: all 0.3s ease; background: #0f172a; }
+        .drop-zone:hover, .drop-zone.active { border-color: #3b82f6; background: #172554; }
+        
+        .log-area { background: #020617; border-radius: 8px; padding: 16px; margin-top: 24px; max-height: 200px; overflow-y: auto; font-family: Consolas, monospace; font-size: 12px; color: #94a3b8; display: none; }
+        .log-area.visible { display: block; }
+        .log-msg { margin-bottom: 4px; }
+        .log-info { color: #60a5fa; }
+        .log-success { color: #4ade80; }
+        .log-warn { color: #fbbf24; }
+        .log-error { color: #f87171; }
+        
+        .btn-convert { display: none; width: 100%; background: #3b82f6; hover:bg-blue-500; color: white; font-weight: bold; padding: 16px; border-radius: 8px; margin-top: 24px; border: none; cursor: pointer; font-size: 16px; transition: background 0.2s; }
+        .btn-convert:hover { background: #2563eb; }
+        .btn-convert:disabled { background: #475569; cursor: not-allowed; }
+        .btn-convert.visible { display: block; }
+
+        .info-box { background: rgba(59, 130, 246, 0.1); border-left: 4px solid #3b82f6; padding: 12px 16px; margin-bottom: 24px; border-radius: 0 8px 8px 0; font-size: 14px; color: #cbd5e1; }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <div class="header">
+            <h1>
+                <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
+                VRM 0.0 ➔ 1.0 JSON Patcher
+            </h1>
+        </div>
+        
+        <div class="content">
+            <div class="info-box">
+                <b>⚠️ ご注意：</b> このツールは「ボーンが正規化されている（Rest Poseの回転がゼロ）」モデル向けの実験的コンバーターです。3Dメッシュや画像データはいじらず、内部のJSON設定のみを1.0仕様に強制的に書き換えます。
+            </div>
+
+            <div class="drop-zone" id="drop-zone">
+                <div class="text-5xl mb-4">📁</div>
+                <div class="text-lg font-bold text-gray-200 mb-2" id="drop-title">VRM 0.0 ファイルをドロップ</div>
+                <div class="text-sm text-gray-400">またはクリックしてファイルを選択</div>
+                <input type="file" id="file-input" accept=".vrm" style="display: none;">
+            </div>
+
+            <div class="log-area" id="log-area"></div>
+
+            <button class="btn-convert" id="btn-convert">VRM 1.0 として変換・保存する</button>
+        </div>
+    </div>
+
+    <script>
+        const dropZone = document.getElementById('drop-zone');
+        const fileInput = document.getElementById('file-input');
+        const logArea = document.getElementById('log-area');
+        const btnConvert = document.getElementById('btn-convert');
+        let currentFile = null;
+
+        // --- UI イベント ---
+        dropZone.addEventListener('click', () => fileInput.click());
+        dropZone.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.classList.add('active'); });
+        dropZone.addEventListener('dragleave', () => dropZone.classList.remove('active'));
+        dropZone.addEventListener('drop', (e) => {
+            e.preventDefault(); dropZone.classList.remove('active');
+            handleFileSelect(e.dataTransfer.files[0]);
+        });
+        fileInput.addEventListener('change', (e) => handleFileSelect(e.target.files[0]));
+
+        function log(message, type = 'info') {
+            logArea.classList.add('visible');
+            const el = document.createElement('div');
+            el.className = `log-msg log-${type}`;
+            el.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
+            logArea.appendChild(el);
+            logArea.scrollTop = logArea.scrollHeight;
+        }
+
+        function handleFileSelect(file) {
+            if (!file || !file.name.toLowerCase().endsWith('.vrm')) {
+                log('拡張子が .vrm のファイルを選択してください。', 'error');
+                return;
+            }
+            currentFile = file;
+            document.getElementById('drop-title').textContent = file.name;
+            dropZone.style.padding = "24px";
+            logArea.innerHTML = '';
+            log(`ファイルを読み込みました: ${file.name} (${(file.size / 1024 / 1024).toFixed(2)} MB)`, 'info');
+            btnConvert.classList.add('visible');
+        }
+
+        // --- 変換の実行 ---
+        btnConvert.addEventListener('click', async () => {
+            if (!currentFile) return;
+            btnConvert.disabled = true;
+            btnConvert.textContent = '変換中...';
+
+            try {
+                await processVrmConversion(currentFile);
+                log('🎉 変換と再パッキングが完了しました！ダウンロードを開始します。', 'success');
+            } catch (error) {
+                console.error(error);
+                log(`エラーが発生しました: ${error.message}`, 'error');
+            } finally {
+                btnConvert.textContent = 'VRM 1.0 として変換・保存する';
+                btnConvert.disabled = false;
+            }
+        });
+
+        // --- コア処理: バイナリ抽出とJSON書き換え ---
+        async function processVrmConversion(file) {
+            log('バイナリデータの読み込みを開始します...', 'info');
+            const arrayBuffer = await file.arrayBuffer();
+            const dataView = new DataView(arrayBuffer);
+
+            const magic = dataView.getUint32(0, true);
+            if (magic !== 0x46546C67) throw new Error('glTF (GLB) ファイルではありません。');
+
+            const jsonChunkLength = dataView.getUint32(12, true);
+            const jsonString = new TextDecoder('utf-8').decode(new Uint8Array(arrayBuffer, 20, jsonChunkLength));
+            const gltf = JSON.parse(jsonString);
+
+            if (!gltf.extensions || !gltf.extensions.VRM) {
+                throw new Error('VRM 0.0 の拡張データが見つかりません。すでに1.0か、通常のGLBかもしれません。');
+            }
+
+            log('JSONチャンクの抽出に成功しました。VRM 1.0仕様への書き換えを開始します...', 'info');
+
+            // 🌟 ここからが魔改造 (マイグレーション) ロジック 🌟
+            transformToVrm1(gltf);
+
+            log('JSONの書き換えが完了しました。新しいGLBを構築します...', 'info');
+
+            // 4バイトアライメントのためのパディング処理
+            const newJsonString = JSON.stringify(gltf);
+            let newJsonData = new TextEncoder().encode(newJsonString);
+            const paddingLength = (4 - (newJsonData.length % 4)) % 4;
+            if (paddingLength > 0) {
+                const padded = new Uint8Array(newJsonData.length + paddingLength);
+                padded.set(newJsonData);
+                for (let i = 0; i < paddingLength; i++) padded[newJsonData.length + i] = 0x20;
+                newJsonData = padded;
+            }
+            const newJsonChunkLength = newJsonData.length;
+
+            // 元のBINチャンクの抽出
+            const binChunkOffset = 20 + jsonChunkLength;
+            let binData = null;
+            if (binChunkOffset < arrayBuffer.byteLength) {
+                const binChunkLength = dataView.getUint32(binChunkOffset, true);
+                binData = new Uint8Array(arrayBuffer, binChunkOffset + 8, binChunkLength);
+            }
+
+            // 新しいファイルの組み立て
+            const totalLength = 12 + 8 + newJsonChunkLength + (binData ? 8 + binData.length : 0);
+            const newBuffer = new ArrayBuffer(totalLength);
+            const newDataView = new DataView(newBuffer);
+            const newUint8Array = new Uint8Array(newBuffer);
+
+            newDataView.setUint32(0, 0x46546C67, true);
+            newDataView.setUint32(4, 2, true);
+            newDataView.setUint32(8, totalLength, true);
+
+            newDataView.setUint32(12, newJsonChunkLength, true);
+            newDataView.setUint32(16, 0x4E4F534A, true);
+            newUint8Array.set(newJsonData, 20);
+
+            if (binData) {
+                const newBinOffset = 20 + newJsonChunkLength;
+                newDataView.setUint32(newBinOffset, binData.length, true);
+                newDataView.setUint32(newBinOffset + 4, 0x004E4942, true);
+                newUint8Array.set(binData, newBinOffset + 8);
+            }
+
+            // ダウンロード
+            const blob = new Blob([newBuffer], { type: 'application/octet-stream' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = file.name.replace('.vrm', '_vrm1.vrm');
+            a.click();
+            URL.revokeObjectURL(url);
+        }
+
+        // ==========================================================
+        // 🛠️ VRM 0.0 -> 1.0 JSON マイグレーションロジック
+        // ==========================================================
+        function transformToVrm1(gltf) {
+            const vrm0 = gltf.extensions.VRM;
+            gltf.extensionsUsed = gltf.extensionsUsed || [];
+
+            // --- 1. VRMC_vrm (基本設定、ボーン、表情) ---
+            const vrm1 = {
+                specVersion: "1.0",
+                meta: {},
+                humanoid: { humanBones: {} },
+                expressions: { preset: {}, custom: {} }
+            };
+
+            // メタデータ
+            if (vrm0.meta) {
+                vrm1.meta.name = vrm0.meta.title || "Converted Model";
+                vrm1.meta.version = vrm0.meta.version || "1.0";
+                vrm1.meta.authors = vrm0.meta.author ? [vrm0.meta.author] : ["Unknown"];
+                vrm1.meta.avatarPermission = vrm0.meta.allowedUserName === "Everyone" ? "everyone" : "onlyAuthor";
+                vrm1.meta.commercialUsage = vrm0.meta.commercialUssageName === "Allow" ? "personalProfit" : "personalNonProfit";
+                vrm1.meta.creditNotation = "require";
+                vrm1.meta.modification = "allow";
+                if (vrm0.meta.texture !== undefined) vrm1.meta.thumbnailImage = vrm0.meta.texture;
+            }
+
+            // ★ 強化版: ボーンの変換 (表記ゆれ吸収とフィルタリング)
+            if (vrm0.humanoid?.humanBones) {
+                // VRM 1.0 で許可されているボーンの完全なリスト
+                const validVrm1Bones = [
+                    "hips", "spine", "chest", "upperChest", "neck", "head",
+                    "leftEye", "rightEye", "jaw",
+                    "leftUpperLeg", "leftLowerLeg", "leftFoot", "leftToes",
+                    "rightUpperLeg", "rightLowerLeg", "rightFoot", "rightToes",
+                    "leftShoulder", "leftUpperArm", "leftLowerArm", "leftHand",
+                    "rightShoulder", "rightUpperArm", "rightLowerArm", "rightHand",
+                    "leftThumbProximal", "leftThumbIntermediate", "leftThumbDistal",
+                    "leftIndexProximal", "leftIndexIntermediate", "leftIndexDistal",
+                    "leftMiddleProximal", "leftMiddleIntermediate", "leftMiddleDistal",
+                    "leftRingProximal", "leftRingIntermediate", "leftRingDistal",
+                    "leftLittleProximal", "leftLittleIntermediate", "leftLittleDistal",
+                    "rightThumbProximal", "rightThumbIntermediate", "rightThumbDistal",
+                    "rightIndexProximal", "rightIndexIntermediate", "rightIndexDistal",
+                    "rightMiddleProximal", "rightMiddleIntermediate", "rightMiddleDistal",
+                    "rightRingProximal", "rightRingIntermediate", "rightRingDistal",
+                    "rightLittleProximal", "rightLittleIntermediate", "rightLittleDistal"
+                ];
+
+                vrm0.humanoid.humanBones.forEach(b => {
+                    let name = b.bone;
+                    if (!name) return;
+
+                    // 1. 先頭を小文字にしてキャメルケースを強制 (例: Hips -> hips)
+                    name = name.charAt(0).toLowerCase() + name.slice(1);
+                    
+                    // 2. よくある表記ゆれの吸収
+                    if (name === "hip") name = "hips";
+                    
+                    // 3. 1.0の仕様に存在するボーンのみを移行する (不明なボーンは弾く)
+                    if (validVrm1Bones.includes(name)) {
+                        vrm1.humanoid.humanBones[name] = { node: b.node };
+                    } else {
+                        console.warn(`[VRM Converter] 未知のボーンを除外しました: ${b.bone}`);
+                    }
+                });
+            }
+
+            // 表情
+            if (vrm0.blendShapeMaster?.blendShapeGroups) {
+                const presetMap = { "joy": "happy", "angry": "angry", "sorrow": "sad", "fun": "relaxed", "a": "aa", "i": "ih", "u": "ou", "e": "ee", "o": "oh", "blink": "blink", "blink_l": "blinkLeft", "blink_r": "blinkRight", "lookup": "lookUp", "lookdown": "lookDown", "lookleft": "lookLeft", "lookright": "lookRight", "neutral": "neutral" };
+                vrm0.blendShapeMaster.blendShapeGroups.forEach(g => {
+                    const presetName = g.presetName ? g.presetName.toLowerCase() : "";
+                    const newExp = {
+                        morphTargetBinds: (g.binds || []).map(b => ({ node: b.mesh, index: b.index, weight: b.weight / 100.0 })),
+                        isBinary: g.isBinary || false
+                    };
+                    if (presetName && presetMap[presetName]) vrm1.expressions.preset[presetMap[presetName]] = newExp;
+                    else vrm1.expressions.custom[g.name || "custom"] = newExp;
+                });
+            }
+            
+            gltf.extensions.VRMC_vrm = vrm1;
+            if (!gltf.extensionsUsed.includes("VRMC_vrm")) gltf.extensionsUsed.push("VRMC_vrm");
+            log('✔️ メタデータ・ボーン・表情(VRMC_vrm)の変換完了', 'success');
+
+            // --- 2. VRMC_materials_mtoon (マテリアル) ---
+            if (vrm0.materialProperties && gltf.materials) {
+                let mtoonCount = 0;
+                vrm0.materialProperties.forEach((prop, i) => {
+                    if (prop.shader === "VRM/MToon" && gltf.materials[i]) {
+                        gltf.materials[i].extensions = gltf.materials[i].extensions || {};
+                        // 0.0のパラメータから1.0のMToonへ簡易マッピング
+                        gltf.materials[i].extensions.VRMC_materials_mtoon = {
+                            specVersion: "1.0",
+                            transparentWithZWrite: prop.renderQueue === 2501,
+                            renderMode: prop.keywordMap?.["_ALPHABLEND_ON"] ? "transparent" : "opaque",
+                            shadeColorFactor: prop.vectorProperties?.["_ShadeColor"] ? prop.vectorProperties["_ShadeColor"].slice(0,3) : [1,1,1],
+                            shadingShiftFactor: prop.floatProperties?.["_ShadeShift"] || 0,
+                            shadingToonyFactor: prop.floatProperties?.["_ShadeToony"] || 0.9,
+                            outlineWidthMode: prop.keywordMap?.["MTOON_OUTLINE_WIDTH_WORLD"] ? "worldCoordinates" : "none",
+                            outlineWidthFactor: prop.floatProperties?.["_OutlineWidth"] || 0,
+                            outlineColorFactor: prop.vectorProperties?.["_OutlineColor"] ? prop.vectorProperties["_OutlineColor"].slice(0,3) : [0,0,0]
+                            // ※テクスチャのインデックス移行などは省略(PBR側で読まれるためある程度は表示可能)
+                        };
+                        mtoonCount++;
+                    }
+                });
+                if (mtoonCount > 0 && !gltf.extensionsUsed.includes("VRMC_materials_mtoon")) {
+                    gltf.extensionsUsed.push("VRMC_materials_mtoon");
+                }
+                log(`✔️ MToonマテリアル(${mtoonCount}個)の変換完了`, 'success');
+            }
+
+            // --- 3. VRMC_node_collider & VRMC_springBone (揺れ物とコライダー) ---
+            if (vrm0.secondaryAnimation) {
+                const colliders1 = []; // 1.0形式のコライダー配列
+                const colliderNodes = new Set(); // コライダーがアタッチされたノード
+
+                // コライダーの変換
+                if (vrm0.secondaryAnimation.colliderGroups) {
+                    if (!gltf.extensions.VRMC_node_collider) gltf.extensions.VRMC_node_collider = { colliders: [] }; // ドキュメントルートの設定は後で
+                    
+                    vrm0.secondaryAnimation.colliderGroups.forEach(cg => {
+                        const nodeIndex = cg.node;
+                        if (nodeIndex === undefined) return;
+                        
+                        // そのノードの拡張領域を確保
+                        const node = gltf.nodes[nodeIndex];
+                        node.extensions = node.extensions || {};
+                        node.extensions.VRMC_node_collider = node.extensions.VRMC_node_collider || { shapes: [] };
+
+                        cg.colliders.forEach(c => {
+                            // 0.0は全てSphere
+                            node.extensions.VRMC_node_collider.shapes.push({
+                                sphere: {
+                                    offset: [c.offset.x, c.offset.y, c.offset.z], // ※Z反転(左手系→右手系)の補正が必要な場合があるが今回はそのまま
+                                    radius: c.radius
+                                }
+                            });
+                            colliders1.push({ node: nodeIndex, shape: { sphere: { offset: [c.offset.x, c.offset.y, c.offset.z], radius: c.radius } } });
+                        });
+                        colliderNodes.add(nodeIndex);
+                    });
+                    if (colliderNodes.size > 0 && !gltf.extensionsUsed.includes("VRMC_node_collider")) gltf.extensionsUsed.push("VRMC_node_collider");
+                    log(`✔️ コライダーの変換完了`, 'success');
+                }
+
+                // SpringBoneの変換
+                if (vrm0.secondaryAnimation.boneGroups) {
+                    const springBone1 = { specVersion: "1.0", colliders: [], springRoots: [] };
+                    
+                    // 1.0ではドキュメントルートにコライダー定義をまとめ、各グループから参照する
+                    const colliderIndices = []; // 旧インデックスと新インデックスのマッピング
+                    
+                    vrm0.secondaryAnimation.boneGroups.forEach(bg => {
+                        // 影響を受けるコライダーを検索してルートに登録
+                        const localColliderIndices = [];
+                        if (bg.colliderGroups) {
+                            bg.colliderGroups.forEach(cgIndex => {
+                                // 0.0のcolliderGroupのインデックスを1.0の個別のcolliderインデックスにマッピングする処理が必要だが、
+                                // 簡易化のため、今回はコライダーの紐付けは省略し、揺れ物(Joints)の階層だけを復元する
+                            });
+                        }
+
+                        // ボーンの紐付け
+                        if (bg.bones) {
+                            bg.bones.forEach(boneNode => {
+                                springBone1.springRoots.push({
+                                    node: boneNode,
+                                    hitRadius: bg.hitRadius || 0,
+                                    stiffness: bg.stiffiness || 1.0,
+                                    gravityPower: bg.gravityPower || 0,
+                                    gravityDir: [bg.gravityDir?.x || 0, bg.gravityDir?.y || -1, bg.gravityDir?.z || 0],
+                                    dragForce: bg.dragForce || 0.4
+                                });
+                            });
+                        }
+                    });
+
+                    gltf.extensions.VRMC_springBone = springBone1;
+                    if (!gltf.extensionsUsed.includes("VRMC_springBone")) gltf.extensionsUsed.push("VRMC_springBone");
+                    log(`✔️ 揺れ物(SpringBone ${springBone1.springRoots.length}ボーン)の変換完了`, 'success');
+                }
+            }
+
+            // --- 4. クリーンアップ ---
+            delete gltf.extensions.VRM;
+            const extIndex = gltf.extensionsUsed.indexOf("VRM");
+            if (extIndex > -1) gltf.extensionsUsed.splice(extIndex, 1);
+            log('✔️ 古いVRM 0.0のデータをパージしました', 'info');
+        }
+    </script>
+</body>
+</html>
