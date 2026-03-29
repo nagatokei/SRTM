@@ -2,7 +2,7 @@
 <html>
 <head>
     <meta charset="utf-8">
-    <title>VRM Receiver (Ultimate Secure & Optimized)</title>
+    <title>VRM Receiver (Integrated v3.0)</title>
     <style>
         body { margin: 0; background: transparent; color: white; font-family: 'Segoe UI', sans-serif; overflow: hidden; width: 100vw; height: 100vh; }
         #ui_panel { position: absolute; top: 15px; left: 15px; background: rgba(15, 15, 15, 0.95); padding: 18px; z-index: 100; border-radius: 12px; width: 280px; border: 1px solid #333; box-shadow: 0 8px 32px rgba(0, 0, 0, 0.8); transition: opacity 0.4s ease, visibility 0.4s; opacity: 0; visibility: hidden; }
@@ -65,12 +65,10 @@
 
         let currentVrm, scene, camera, renderer, peer, conn, currentVrmUrl, reconnectTimer = null, modelHasPS = false, isVRM0 = false;
         
-        // --- メモリ節約用: オブジェクトの事前生成 (Zero-new) ---
         const tempQuat = new THREE.Quaternion(), halfQuat = new THREE.Quaternion(), tempVec3 = new THREE.Vector3(), headPos = new THREE.Vector3();
         let targetData = { h:0, la:0, ra:0, r:[0,0,0,1], s:null, b:1.5, s_scale:1.0, camPos:[0,1.4,1.5], camTarget:[0,1.2,0] };
         const VRM_STANDARD_EXPRESSIONS = ['happy','angry','sad','relaxed','surprised','blinkLeft','blinkRight','aa','ih','ou','ee','oh','lookUp','lookDown','lookLeft','lookRight'];
 
-        // --- 1. セキュリティ ---
         function secureSanitize(str) {
             return (typeof str === 'string') ? str.replace(/[\u0000-\u001F\u007F-\u009F\u200B-\u200D\uFEFF]/g, "").trim() : "";
         }
@@ -99,7 +97,6 @@
             return d;
         }
 
-        // --- 2. 初期化 ---
         const urlParams = new URLSearchParams(window.location.search);
         const urlId = secureSanitize(urlParams.get('id')), urlVrm = secureSanitize(urlParams.get('vrm'));
         if (urlId) targetInput.value = urlId;
@@ -113,7 +110,6 @@
             if (saved && isSafeAndValidVrm(saved)) vrmToLoad = fixDirectUrl(saved);
         }
 
-        // --- 3. ロジック ---
         function mapARKitToVRM(shapes, bS) {
             const get = (n) => shapes[n] || 0;
             const jaw = get('jawOpen'), stretch = (get('mouthStretchLeft')+get('mouthStretchRight'))/2, smile = (get('mouthSmileLeft')+get('mouthSmileRight'))/2;
@@ -141,7 +137,13 @@
                 modelHasPS = ['browDownLeft','cheekPuff','noseSneerLeft'].some(n => currentVrm.expressionManager.getExpression(n));
                 modelBadge.innerText = modelHasPS ? "PS対応" : "自動マッピング"; modelBadge.className = modelHasPS ? "badge-ps" : "badge-mapped";
                 const head = currentVrm.humanoid.getNormalizedBoneNode("head");
-                if (head) { head.getWorldPosition(headPos); camera.position.set(0, headPos.y, 1.5); if(!camera.userData.target) camera.userData.target = new THREE.Vector3(0, headPos.y, 0); camera.lookAt(camera.userData.target); }
+                if (head) {
+                    head.getWorldPosition(headPos);
+                    const zCam = isVRM0 ? -1.5 : 1.5; // 初期カメラ位置をモデルの正面に合わせる
+                    camera.position.set(0, headPos.y, zCam);
+                    if(!camera.userData.target) camera.userData.target = new THREE.Vector3(0, headPos.y, 0);
+                    camera.lookAt(camera.userData.target);
+                }
                 statusEl.innerText = "Model Ready"; statusEl.style.color = "#00ff00";
                 if (targetInput.value.trim() !== "") connectToSender();
             });
@@ -165,7 +167,6 @@
         document.getElementById("vrm_file").onchange = (e) => { const f = e.target.files[0]; if (f) { if(currentVrmUrl) URL.revokeObjectURL(currentVrmUrl); currentVrmUrl = URL.createObjectURL(f); loadVRM(currentVrmUrl); } };
         connectBtn.onclick = () => { if (reconnectTimer) clearInterval(reconnectTimer); connectToSender(); };
 
-        // --- 4. Render Loop ---
         scene = new THREE.Scene(); camera = new THREE.PerspectiveCamera(30, window.innerWidth/window.innerHeight, 0.1, 20);
         renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, premultipliedAlpha: false });
         renderer.outputColorSpace = THREE.SRGBColorSpace;
@@ -173,10 +174,13 @@
         const l = new THREE.DirectionalLight(0xffffff, Math.PI); l.position.set(0,0,1); camera.add(l);
         scene.add(camera, new THREE.AmbientLight(0xffffff, 0.5));
 
+        
         function animate() {
             requestAnimationFrame(animate);
             if (currentVrm && targetData) {
                 const lerp = 0.2, mouth = 0.6;
+                
+                // 1. カメラ・位置同期
                 if (targetData.camPos && targetData.camTarget) {
                     camera.position.lerp(tempVec3.fromArray(targetData.camPos), lerp);
                     if (!camera.userData.target) camera.userData.target = new THREE.Vector3().fromArray(targetData.camTarget);
@@ -186,42 +190,80 @@
                 currentVrm.scene.position.y += (targetData.h - currentVrm.scene.position.y) * lerp;
                 const ns = Math.abs(currentVrm.scene.scale.x) + ((targetData.s_scale || 1.0) - Math.abs(currentVrm.scene.scale.x)) * lerp;
                 currentVrm.scene.scale.set(ns, ns, ns);
+
+                // 2. 腕の角度補正 (0.0と1.0の差をここで直接吸収)
+                const armFix = isVRM0 ? 1 : -1; // 0.0は正、1.0は負で計算
                 const aL = currentVrm.humanoid.getNormalizedBoneNode("rightUpperArm"), aR = currentVrm.humanoid.getNormalizedBoneNode("leftUpperArm");
-                if(aL) aL.rotation.z += (THREE.MathUtils.degToRad(-targetData.la) - aL.rotation.z) * lerp;
-                if(aR) aR.rotation.z += (THREE.MathUtils.degToRad(targetData.ra) - aR.rotation.z) * lerp;
+                if(aL) aL.rotation.z += (THREE.MathUtils.degToRad(targetData.la * armFix) - aL.rotation.z) * lerp;
+                if(aR) aR.rotation.z += (THREE.MathUtils.degToRad(-targetData.ra * armFix) - aR.rotation.z) * lerp;
+
+                // 3. 頭部・首の回転 (ヨー・ロールの反転をisVRM0で直接制御)
                 if (targetData.r) {
                     const h = currentVrm.humanoid.getNormalizedBoneNode("head"), n = currentVrm.humanoid.getNormalizedBoneNode("neck");
-                    tempQuat.fromArray(targetData.r); halfQuat.set(0,0,0,1).slerp(tempQuat, 0.5);
+                    
+                    // Senderからの標準データに対し、0.0の背面運用時のみ軸を翻転
+                    const axisFix = isVRM0 ? 1 : 1; 
+                    tempQuat.set(
+                        targetData.r[0],           // Pitch(x)
+                        targetData.r[1] * axisFix, // Yaw(y)
+                        targetData.r[2] * axisFix, // Roll(z)
+                        targetData.r[3]            // w
+                    );
+                    
+                    halfQuat.set(0,0,0,1).slerp(tempQuat, 0.5);
                     if (h && n) { n.quaternion.slerp(halfQuat, lerp); h.quaternion.slerp(halfQuat, lerp); }
                 }
+
+                // 4. 表情・ウインクの左右反転 (0.0のみ入れ替え)
                 if (targetData.s) {
                     const exp = currentVrm.expressionManager, bS = targetData.b || 1.5;
                     if (modelHasPS) {
                         const SKIP = new Set(['eyeBlinkLeft','eyeBlinkRight','eyeLookDownLeft','eyeLookDownRight','eyeLookInLeft','eyeLookInRight','eyeLookOutLeft','eyeLookOutRight','eyeLookUpLeft','eyeLookUpRight']);
                         Object.keys(targetData.s).forEach(k => {
                             const val = targetData.s[k];
-                            if (k.includes('eyeBlink')) { const vk = k.includes('Left') ? 'blinkRight' : 'blinkLeft'; exp.setValue(vk, exp.getValue(vk) + (Math.min(1.0, val * bS) - exp.getValue(vk)) * lerp); }
-                            else if (k === 'jawOpen' || k === 'aa') { exp.setValue('aa', exp.getValue('aa') + (val - exp.getValue('aa')) * mouth); exp.setValue('jawOpen', exp.getValue('aa')); }
-                            else if (!SKIP.has(k)) { exp.setValue(k, (exp.getValue(k)||0) + (val - (exp.getValue(k)||0)) * lerp); }
+                            
+                            // まばたき判定：三項演算子で0.0のみ左右を入れ替え
+                            if (k.includes('eyeBlink')) { 
+                                const vk = (k.includes('Left') && isVRM0) ? 'blinkLeft' : 
+                                           (k.includes('Left') ? 'blinkRight' : 
+                                           (isVRM0 ? 'blinkRight' : 'blinkLeft'));
+                                exp.setValue(vk, exp.getValue(vk) + (Math.min(1.0, val * bS) - exp.getValue(vk)) * lerp); 
+                            }
+                            else if (k === 'jawOpen' || k === 'aa') { 
+                                exp.setValue('aa', exp.getValue('aa') + (val - exp.getValue('aa')) * mouth); 
+                                exp.setValue('jawOpen', exp.getValue('aa')); 
+                            }
+                            else if (!SKIP.has(k)) { 
+                                exp.setValue(k, (exp.getValue(k)||0) + (val - (exp.getValue(k)||0)) * lerp); 
+                            }
                         });
                     } else {
+                        // 通常モデル用の簡易マッピング
                         const m = mapARKitToVRM(targetData.s, bS);
-                        VRM_STANDARD_EXPRESSIONS.forEach(n => { const spd = n.length < 3 ? mouth : lerp; exp.setValue(n, (exp.getValue(n)||0) + ((m[n]||0) - (exp.getValue(n)||0)) * spd); });
+                        if (isVRM0) { // 0.0ならウインク値をスワップ
+                            const t = m.blinkLeft; m.blinkLeft = m.blinkRight; m.blinkRight = t;
+                        }
+                        VRM_STANDARD_EXPRESSIONS.forEach(n => { 
+                            const spd = n.length < 3 ? mouth : lerp; 
+                            exp.setValue(n, (exp.getValue(n)||0) + ((m[n]||0) - (exp.getValue(n)||0)) * spd); 
+                        });
                     }
+
+                    // 5. 視線の左右補正
                     const lE = currentVrm.humanoid.getNormalizedBoneNode("leftEye"), rE = currentVrm.humanoid.getNormalizedBoneNode("rightEye");
                     if (lE && rE) {
                         const s = targetData.s, mp = 0.174, my = 0.122;
-                        lE.rotation.x += (((s.eyeLookDownLeft||0)-(s.eyeLookUpLeft||0))*mp - lE.rotation.x) * lerp;
-                        lE.rotation.y += (((s.eyeLookOutLeft||0)-(s.eyeLookInLeft||0))*-my - lE.rotation.y) * lerp;
-                        rE.rotation.x += (((s.eyeLookDownRight||0)-(s.eyeLookUpRight||0))*mp - rE.rotation.x) * lerp;
-                        rE.rotation.y += (((s.eyeLookInRight||0)-(s.eyeLookOutRight||0))*-my - rE.rotation.y) * lerp;
+                        const eyeFix = isVRM0 ? -1 : 1; 
+                        lE.rotation.x += (((s.eyeLookDownLeft||0)-(s.eyeLookUpLeft||0))*mp*eyeFix - lE.rotation.x) * lerp;
+                        lE.rotation.y += (((s.eyeLookOutLeft||0)-(s.eyeLookInLeft||0))*-my*eyeFix - lE.rotation.y) * lerp;
+                        rE.rotation.x += (((s.eyeLookDownRight||0)-(s.eyeLookUpRight||0))*mp*eyeFix - rE.rotation.x) * lerp;
+                        rE.rotation.y += (((s.eyeLookInRight||0)-(s.eyeLookOutRight||0))*-my*eyeFix - rE.rotation.y) * lerp;
                     }
                 }
                 currentVrm.update(0.016);
             }
             renderer.render(scene, camera);
         }
-
         window.addEventListener('load', () => { animate(); if(vrmToLoad) loadVRM(vrmToLoad); else statusEl.innerText = "Please select VRM file"; });
         window.addEventListener('resize', () => { camera.aspect = window.innerWidth/window.innerHeight; camera.updateProjectionMatrix(); renderer.setSize(window.innerWidth, window.innerHeight); });
     </script>
