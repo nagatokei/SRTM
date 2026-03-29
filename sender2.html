@@ -3,7 +3,7 @@
 
 <head>
   <meta charset="utf-8">
-  <title>VRM Sender (OrbitControls Optimized)</title>
+  <title>SRTM WCFTS - Sender (Integrated v3.0)</title>
   <style>
     body {
       margin: 0;
@@ -76,14 +76,6 @@
       font-size: 11px;
       margin-top: 5px;
       transition: background 0.2s;
-    }
-
-    #btn_away:hover {
-      background: #666;
-    }
-
-    #btn_back:hover {
-      background: #0078d4;
     }
 
     #mic_bar_bg {
@@ -188,7 +180,7 @@
 <body>
 
   <div id="ui_panel">
-    <b style="font-size: 14px;">VRM Sender (Orbit Optimized)</b>
+    <b style="font-size: 14px;">SRTM WCFTS - Sender</b>
     <div id="model_type_badge"></div>
     <div class="control-group" style="margin-top:15px;"><label>1. VRMファイルを選択:</label><input type="file" id="vrm_file"
         accept=".vrm"></div>
@@ -254,22 +246,11 @@
     let currentVrm, faceLandmarker, lastVideoTime = -1;
     let isVRM0 = false;
     let peer, connections = [], audioContext, analyser, dataArray, currentVolume = 0;
-    let modelHasPS = false, shouldResetPose = false, controls;
+    let modelHasPS = false, shouldResetPose = false, controls, scene, camera, renderer;
     let headWorldY = 1.2, targetCamYOffset = 0, currentCamYOffset = 0;
 
-    // --- メモリ節約用: オブジェクトの事前生成 ---
     const offsetRotation = new THREE.Quaternion(), tempQuat1 = new THREE.Quaternion(), tempQuat2 = new THREE.Quaternion(), tempMatrix = new THREE.Matrix4();
     const vData = { h: 0, la: 0, ra: 0, b: 1.5, s: {}, r: null, s_scale: 1.0, camPos: [0, 0, 0], camTarget: [0, 0, 0] };
-    const VRM_STANDARD_EXPRESSIONS = ['happy', 'angry', 'sad', 'relaxed', 'surprised', 'blinkLeft', 'blinkRight', 'aa', 'ih', 'ou', 'ee', 'oh', 'lookUp', 'lookDown', 'lookLeft', 'lookRight'];
-
-    // --- カメラ・制御イベント ---
-    document.getElementById("btn_reset_cam").onclick = () => {
-      s_cam_y.value = 0; targetCamYOffset = 0; currentCamYOffset = 0;
-      const zPos = isVRM0 ? -1.5 : 1.5;
-      camera.position.set(0, headWorldY, zPos); controls.target.set(0, headWorldY, 0); controls.update();
-    };
-    document.getElementById("btn_away").onclick = () => { targetCamYOffset = 2.0; };
-    document.getElementById("btn_back").onclick = () => { targetCamYOffset = parseFloat(s_cam_y.value); };
 
     function isPerfectSyncModel(vrm) {
       if (!vrm?.expressionManager) return false;
@@ -294,6 +275,14 @@
       return mapped;
     }
 
+    document.getElementById("btn_reset_cam").onclick = () => {
+      s_cam_y.value = 0; targetCamYOffset = 0; currentCamYOffset = 0;
+      camera.position.set(0, headWorldY, 1.5); controls.target.set(0, headWorldY, 0); controls.update();
+    };
+    document.getElementById("btn_away").onclick = () => { targetCamYOffset = 2.0; };
+    document.getElementById("btn_back").onclick = () => { targetCamYOffset = parseFloat(s_cam_y.value); };
+    document.getElementById("btn_reset_pose").onclick = () => { shouldResetPose = true; };
+
     let savedRoomId = localStorage.getItem('last_room_id') || ("vrm-" + Math.random().toString(36).substring(2, 10));
     localStorage.setItem('last_room_id', savedRoomId);
     roomIdInput.value = savedRoomId;
@@ -303,7 +292,6 @@
         const b = document.getElementById("btn_copy"); b.innerText = "OK!"; setTimeout(() => b.innerText = "コピー", 2000);
       });
     };
-    document.getElementById("btn_reset_pose").onclick = () => { shouldResetPose = true; };
 
     const dbName = "VRM_Storage", storeName = "models";
     const openDb = () => new Promise(res => {
@@ -326,10 +314,18 @@
         currentVrm.scene.scale.set(1, 1, 1);
         const head = currentVrm.humanoid.getNormalizedBoneNode("head");
         if (head) {
-          const wp = new THREE.Vector3(); head.getWorldPosition(wp);
-          const zPos = isVRM0 ? -1.5 : 1.5; camera.position.set(0, headWorldY, zPos);
-          headWorldY = wp.y; targetCamYOffset = parseFloat(s_cam_y.value); currentCamYOffset = targetCamYOffset;
-          controls.target.set(0, headWorldY + targetCamYOffset, 0); controls.update();
+          const wp = new THREE.Vector3();
+          head.getWorldPosition(wp);
+          headWorldY = wp.y;
+          targetCamYOffset = parseFloat(s_cam_y.value);
+          currentCamYOffset = targetCamYOffset;
+
+          const zPos = isVRM0 ? 1.5 : 1.5;
+
+          camera.position.set(0, headWorldY, 1.5);
+          controls.target.set(0, headWorldY + targetCamYOffset, 0);
+          controls.update();
+          console.log(`Camera initialized for VRM ${isVRM0 ? '0.0' : '1.0'} at Z: ${zPos}`);
         }
         modelHasPS = isPerfectSyncModel(currentVrm);
         modelBadge.style.display = "block"; modelBadge.innerText = modelHasPS ? "PS対応" : "自動マッピング";
@@ -349,7 +345,6 @@
       try {
         const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: { width: 640, height: 480 } });
         video.srcObject = stream; video.play();
-        document.getElementById("video_ui").style.display = "none";
         audioContext = new (window.AudioContext || window.webkitAudioContext)();
         const src = audioContext.createMediaStreamSource(stream);
         analyser = audioContext.createAnalyser(); analyser.fftSize = 256; src.connect(analyser);
@@ -361,107 +356,116 @@
       } catch (e) { alert("カメラ/マイク起動失敗"); }
     };
 
-function animate() {
+    function animate() {
       requestAnimationFrame(animate);
-      
-      // 1. UI・カメラ制御（軽量）
       if (controls) {
         const sVal = parseFloat(s_cam_y.value);
-        if (Math.floor(performance.now()) % 10 === 0) {
-            document.getElementById("v_cam_y").innerText = sVal.toFixed(2);
-        }
+        if (Math.floor(performance.now()) % 10 === 0) document.getElementById("v_cam_y").innerText = sVal.toFixed(2);
         if (targetCamYOffset !== 2.0) targetCamYOffset = sVal;
         currentCamYOffset += (targetCamYOffset - currentCamYOffset) * 0.1;
-        controls.target.y = headWorldY + currentCamYOffset;
-        controls.update();
+        controls.target.y = headWorldY + currentCamYOffset; controls.update();
       }
-      
-      // 2. マイク解析
       if (analyser) {
         analyser.getByteFrequencyData(dataArray);
         currentVolume = (dataArray.reduce((a, b) => a + b, 0) / dataArray.length) / 128.0;
         micBarFill.style.width = Math.min(100, currentVolume * 400) + "%";
       }
 
-      // 3. トラッキング & VRM更新（ビデオフレーム更新時のみ）
       if (video.readyState >= 2 && video.currentTime !== lastVideoTime) {
         lastVideoTime = video.currentTime;
         const res = faceLandmarker ? faceLandmarker.detectForVideo(video, performance.now()) : null;
-        
         if (currentVrm) {
           const l = parseFloat(s_l.value), r = parseFloat(s_r.value), bS = parseFloat(s_blink.value), mS = parseFloat(s_mic.value);
           document.getElementById("v_l").innerText = l; document.getElementById("v_r").innerText = r;
           document.getElementById("v_blink").innerText = bS; document.getElementById("v_mic").innerText = mS;
-
-          // 送信データの基本セット
           vData.la = l; vData.ra = r; vData.b = bS;
           vData.camPos = [camera.position.x, camera.position.y, camera.position.z];
           vData.camTarget = [controls.target.x, controls.target.y, controls.target.z];
 
-          // 腕の制御（安定版の鏡像ロジック）
+          const armFix = isVRM0 ? 1 : -1;
           const aL = currentVrm.humanoid.getNormalizedBoneNode("rightUpperArm");
           const aR = currentVrm.humanoid.getNormalizedBoneNode("leftUpperArm");
-          if (aL) aL.rotation.z = THREE.MathUtils.degToRad(-l); 
-          if (aR) aR.rotation.z = THREE.MathUtils.degToRad(r);
+          if (aL) aL.rotation.z = THREE.MathUtils.degToRad(l * armFix);
+          if (aR) aR.rotation.z = THREE.MathUtils.degToRad(-r * armFix);
 
+          const axisFix = isVRM0 ? -1 : 1;
           const exp = currentVrm.expressionManager;
           if (res && res.faceBlendshapes.length > 0) {
             const categories = res.faceBlendshapes[0].categories;
             const shapes = {}; categories.forEach(c => { shapes[c.categoryName] = c.score; });
             const mO = Math.max(shapes.jawOpen || 0, currentVolume * mS);
-
-            // 表情更新（リセットループなし・直接上書きで軽量化）
             if (psyncToggle.checked) {
+              // [sender.html] 表情更新：0.0/1.0 鏡像反転パッチ
               if (modelHasPS) {
-                // 鏡像ウインクのクロス代入
-                categories.forEach(c => { 
-                    if (c.categoryName === 'eyeBlinkLeft') exp.setValue("blinkLeft", Math.min(1.0, shapes.eyeBlinkRight * bS));
-                    else if (c.categoryName === 'eyeBlinkRight') exp.setValue("blinkRight", Math.min(1.0, shapes.eyeBlinkLeft * bS));
-                    else if (c.categoryName !== 'jawOpen') exp.setValue(c.categoryName, c.score); 
+                // Perfect Sync: 鏡像ウインクのクロス代入
+                categories.forEach(c => {
+                  if (c.categoryName === 'eyeBlinkLeft') {
+                    // 0.0かつカメラを回す運用の場合、さらに左右を入れ替える
+                    const targetBlink = isVRM0 ? "blinkRight" : "blinkLeft";
+                    exp.setValue(targetBlink, Math.min(1.0, shapes.eyeBlinkRight * bS));
+                  }
+                  else if (c.categoryName === 'eyeBlinkRight') {
+                    const targetBlink = isVRM0 ? "blinkLeft" : "blinkRight";
+                    exp.setValue(targetBlink, Math.min(1.0, shapes.eyeBlinkLeft * bS));
+                  }
+                  else if (c.categoryName !== 'jawOpen') {
+                    exp.setValue(c.categoryName, c.score);
+                  }
                 });
                 exp.setValue("aa", mO);
               } else {
+                // 通常マッピング（VRM 0.0標準モデルなど）
                 const mapped = mapARKitToVRM({ ...shapes, jawOpen: mO }, bS);
+                if (isVRM0) {
+                  // 左右のウインクを入れ替えて適用
+                  const tempLeft = mapped.blinkLeft;
+                  mapped.blinkLeft = mapped.blinkRight;
+                  mapped.blinkRight = tempLeft;
+                }
                 Object.keys(mapped).forEach(k => exp.setValue(k, mapped[k]));
               }
               vData.s = { ...shapes, jawOpen: mO };
             }
-
-            // 視線ボーン（Sender自身の表示用・鏡像クロス）
             const lE = currentVrm.humanoid.getNormalizedBoneNode("rightEye"), rE = currentVrm.humanoid.getNormalizedBoneNode("leftEye");
             if (lE && rE) {
+              const s = shapes; // スコープ内のshapesを使用
               const mp = 0.174, my = 0.122;
-              lE.rotation.set(((shapes.eyeLookDownRight||0)-(shapes.eyeLookUpRight||0))*mp, -((shapes.eyeLookOutRight||0)-(shapes.eyeLookInRight||0))*-my, 0);
-              rE.rotation.set(((shapes.eyeLookDownLeft||0)-(shapes.eyeLookUpLeft||0))*mp, -((shapes.eyeLookInLeft||0)-(shapes.eyeLookOutLeft||0))*-my, 0);
+              const eyeFix = isVRM0 ? -1 : 1;
+
+              // 0.0の場合、左右の入力を入れ替える（shapes.eyeLook...Left/Right の参照を逆転）
+              if (isVRM0) {
+                // 右目(lE)に左の入力を、左目(rE)に右の入力を入れる（鏡像対応）
+                lE.rotation.set(((s.eyeLookDownLeft || 0) - (s.eyeLookUpLeft || 0)) * mp * eyeFix, -((s.eyeLookOutLeft || 0) - (s.eyeLookInLeft || 0)) * -my * eyeFix, 0);
+                rE.rotation.set(((shapes.eyeLookDownRight || 0) - (shapes.eyeLookUpRight || 0)) * mp * eyeFix, -((shapes.eyeLookInRight || 0) - (shapes.eyeLookOutRight || 0)) * -my * eyeFix, 0);
+              } else {
+                // 1.0標準
+                lE.rotation.set(((s.eyeLookDownRight || 0) - (s.eyeLookUpRight || 0)) * mp * eyeFix, -((s.eyeLookOutRight || 0) - (s.eyeLookInRight || 0)) * -my * eyeFix, 0);
+                rE.rotation.set(((s.eyeLookDownLeft || 0) - (s.eyeLookUpLeft || 0)) * mp * eyeFix, -((s.eyeLookInLeft || 0) - (s.eyeLookOutLeft || 0)) * -my * eyeFix, 0);
+              }
             }
           }
-
-          // 頭部回転（Quaternion鏡像）
           if (res && res.facialTransformationMatrixes.length > 0) {
             tempMatrix.fromArray(res.facialTransformationMatrixes[0].data);
             tempQuat1.setFromRotationMatrix(tempMatrix);
             if (shouldResetPose) { offsetRotation.copy(tempQuat1).invert(); shouldResetPose = false; }
             tempQuat2.multiplyQuaternions(offsetRotation, tempQuat1);
-            
-            vData.r = [tempQuat2.x, -tempQuat2.y, -tempQuat2.z, tempQuat2.w];
-            
+            if (isVRM0) vData.r = [-tempQuat2.x, -tempQuat2.y, tempQuat2.z, tempQuat2.w];
+            else vData.r = [tempQuat2.x, -tempQuat2.y, -tempQuat2.z, tempQuat2.w];
             tempQuat1.set(vData.r[0], vData.r[1], vData.r[2], vData.r[3]).normalize();
             const halfQuat = new THREE.Quaternion().set(0, 0, 0, 1).slerp(tempQuat1, 0.5);
             const head = currentVrm.humanoid.getNormalizedBoneNode("head"), neck = currentVrm.humanoid.getNormalizedBoneNode("neck");
             if (head && neck) { neck.quaternion.copy(halfQuat); head.quaternion.copy(halfQuat); }
           }
-          
-          // 送信（1フレームに1回）
           for (let i = connections.length - 1; i >= 0; i--) { if (connections[i].open) connections[i].send(vData); }
           currentVrm.update(0.016);
         }
       }
       renderer.render(scene, camera);
     }
-    
-    const scene = new THREE.Scene(), camera = new THREE.PerspectiveCamera(30, window.innerWidth / window.innerHeight, 0.1, 20);
+
+    scene = new THREE.Scene(); camera = new THREE.PerspectiveCamera(30, window.innerWidth / window.innerHeight, 0.1, 20);
     camera.position.set(0, 1.2, 1.5);
-    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+    renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
     renderer.setSize(window.innerWidth, window.innerHeight); document.body.appendChild(renderer.domElement);
     scene.add(camera, new THREE.DirectionalLight(0xffffff, Math.PI), new THREE.AmbientLight(0xffffff, 0.5));
     controls = new OrbitControls(camera, renderer.domElement);
@@ -481,9 +485,6 @@ function animate() {
     }
     setupTracking();
   </script>
-</body>
-
-</html>
 </body>
 
 </html>
