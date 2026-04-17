@@ -3,6 +3,9 @@
 <head>
     <meta charset="utf-8">
     <title>VRM Receiver (Ultimate Secure & Optimized)</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@700;900&family=Noto+Sans+JP:wght@700;900&family=Shippori+Mincho:wght@700;800&display=swap" rel="stylesheet">
     <style>
         body { margin: 0; background: transparent; color: white; font-family: 'Segoe UI', sans-serif; overflow: hidden; width: 100vw; height: 100vh; }
         #ui_panel { position: absolute; top: 15px; left: 15px; background: rgba(15, 15, 15, 0.95); padding: 18px; z-index: 100; border-radius: 12px; width: 280px; border: 1px solid #333; box-shadow: 0 8px 32px rgba(0, 0, 0, 0.8); transition: opacity 0.4s ease, visibility 0.4s; opacity: 0; visibility: hidden; }
@@ -25,6 +28,8 @@
 
         /* アバターのキャンバスを前面に */
         canvas { position: absolute; top: 0; left: 0; z-index: 10; pointer-events: none; }
+        /* 背景画像レイヤーを最背面に */
+        #bg_image_layer { position: absolute; top: -5%; left: -5%; width: 110vw; height: 110vh; z-index: 1; background-size: cover; background-position: center; pointer-events: none; }
         /* テキストオーバーレイを背面（背景とキャンバスの間）に */
         #text_overlay {
             position: absolute; top: 0; left: 0; width: 100vw; height: 100vh;
@@ -39,13 +44,14 @@
         }
         #overlay_subtitle {
             font-size: 4vw; margin: 0; color: #ffcc00; line-height: 1.2;
-            font-weight: bold; font-family: sans-serif;
+            font-weight: bold; font-family: 'Impact', 'Arial Black', sans-serif;
             text-shadow: 2px 2px 0 #000, -2px -2px 0 #000, 2px -2px 0 #000, -2px 2px 0 #000, 0 6px 12px rgba(0,0,0,0.8);
         }
     </style>
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
 </head>
 <body>
+    <div id="bg_image_layer"></div>
     <div id="ui_panel">
         <div class="panel-title">
             <span>VRM RECEIVER</span>
@@ -185,12 +191,11 @@
                         if (data.type === 'bgImage') {
                             const blob = new Blob([data.data], { type: data.mime });
                             const url = URL.createObjectURL(blob);
-                            document.body.style.backgroundImage = `url('${url}')`;
-                            document.body.style.backgroundSize = 'cover';
-                            document.body.style.backgroundPosition = 'center';
+                            document.getElementById('bg_image_layer').style.backgroundImage = `url('${url}')`;
                         } else if (data.type === 'bgClear') {
-                            document.body.style.backgroundImage = 'none';
-                            document.body.style.backgroundColor = 'transparent';
+                            document.getElementById('bg_image_layer').style.backgroundImage = 'none';
+                        } else if (data.type === 'bgBlur') {
+                            document.getElementById('bg_image_layer').style.filter = `blur(${data.blur}px)`;
                         } else if (data.type === 'textOverlay') {
                             document.getElementById('overlay_title').innerText = data.title;
                             document.getElementById('overlay_subtitle').innerText = data.subtitle;
@@ -201,6 +206,10 @@
                             if (data.textSize) {
                                 document.getElementById('overlay_title').style.fontSize = (8 * data.textSize) + 'vw';
                                 document.getElementById('overlay_subtitle').style.fontSize = (4 * data.textSize) + 'vw';
+                            }
+                            if (data.fontFamily) {
+                                document.getElementById('overlay_title').style.fontFamily = data.fontFamily;
+                                document.getElementById('overlay_subtitle').style.fontFamily = data.fontFamily;
                             }
                         } else {
                             targetData = data; 
