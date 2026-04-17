@@ -1,0 +1,486 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <meta charset="utf-8">
+  <title>VRM Sender (OrbitControls Optimized)</title>
+  <style>
+    body {
+      margin: 0;
+      background: #000;
+      color: white;
+      font-family: sans-serif;
+      overflow: hidden;
+    }
+
+    #ui_panel {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      background: rgba(0, 0, 0, 0.85);
+      padding: 15px;
+      z-index: 10;
+      border-radius: 8px;
+      border: 1px solid #555;
+      width: 280px;
+      max-height: 90vh;
+      overflow-y: auto;
+    }
+
+    .control-group {
+      margin-bottom: 12px;
+    }
+
+    label {
+      display: block;
+      font-size: 11px;
+      margin-bottom: 3px;
+      color: #ccc;
+    }
+
+    input[type="range"] {
+      width: 100%;
+      cursor: pointer;
+    }
+
+    input[type="text"],
+    input[type="file"] {
+      width: 100%;
+      padding: 5px;
+      background: #222;
+      color: #fff;
+      border: 1px solid #666;
+      border-radius: 4px;
+      box-sizing: border-box;
+      font-size: 12px;
+    }
+
+    button {
+      width: 100%;
+      padding: 8px;
+      cursor: pointer;
+      background: #0078d4;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      font-weight: bold;
+      margin-top: 10px;
+    }
+
+    button:hover {
+      background: #005a9e;
+    }
+
+    .btn-secondary {
+      background: #444;
+      font-size: 11px;
+      margin-top: 5px;
+      transition: background 0.2s;
+    }
+
+    #btn_away:hover {
+      background: #666;
+    }
+
+    #btn_back:hover {
+      background: #0078d4;
+    }
+
+    #mic_bar_bg {
+      width: 100%;
+      height: 6px;
+      background: #333;
+      border-radius: 3px;
+      margin-top: 5px;
+      overflow: hidden;
+    }
+
+    #mic_bar_fill {
+      width: 0%;
+      height: 100%;
+      background: #00ff00;
+    }
+
+    #video_ui {
+      position: absolute;
+      bottom: 10px;
+      right: 10px;
+      width: 160px;
+      opacity: 0.5;
+      z-index: 5;
+    }
+
+    video {
+      width: 100%;
+      transform: scaleX(-1);
+      border-radius: 4px;
+      border: 1px solid #444;
+    }
+
+    #conn_status {
+      font-size: 12px;
+      color: #ffcc00;
+      margin-top: 10px;
+      font-weight: bold;
+      text-align: center;
+    }
+
+    hr {
+      border: 0;
+      border-top: 1px solid #444;
+      margin: 15px 0;
+    }
+
+    .val-disp {
+      float: right;
+      color: #fff;
+      font-weight: bold;
+    }
+
+    .mode-switch {
+      background: #333;
+      padding: 10px;
+      border-radius: 4px;
+      border: 1px solid #0078d4;
+      margin: 10px 0;
+    }
+
+    #model_type_badge {
+      display: none;
+      font-size: 11px;
+      padding: 4px 10px;
+      border-radius: 4px;
+      margin-top: 6px;
+      font-weight: bold;
+      text-align: center;
+    }
+
+    .badge-ps {
+      background: #28a745;
+      color: #fff;
+    }
+
+    .badge-mapped {
+      background: #ffc107;
+      color: #000;
+    }
+
+    .blink_dot {
+      animation: blink 1.2s infinite;
+      margin-right: 4px;
+    }
+
+    @keyframes blink {
+
+      0%,
+      100% {
+        opacity: 1;
+      }
+
+      50% {
+        opacity: 0.2;
+      }
+    }
+  </style>
+  <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+</head>
+
+<body>
+
+  <div id="ui_panel">
+    <b style="font-size: 14px;">VRM Sender (Orbit Optimized)</b>
+    <div id="model_type_badge"></div>
+    <div class="control-group" style="margin-top:15px;"><label>1. VRMファイルを選択:</label><input type="file" id="vrm_file"
+        accept=".vrm"></div>
+    <div class="mode-switch"><label style="cursor: pointer;"><input type="checkbox" id="psync_mode" checked>
+        拡張表情モード</label></div>
+    <div class="control-group">
+      <label>2. 送信ID / 開始:</label>
+      <div style="display: flex; gap: 5px;"><input type="text" id="room_id" readonly style="flex: 1;"><button
+          id="btn_copy" class="btn-secondary" style="width: auto; margin: 0; padding: 0 10px;">コピー</button></div>
+      <button id="btn_start">カメラ・マイク・配信 開始</button>
+      <div id="conn_status">VRMを選択してください</div>
+      <div id="live_indicator"
+        style="display:none; font-size:12px; color:#ff4444; text-align:center; margin-top:8px; font-weight:bold;"><span
+          class="blink_dot">●</span> CAMERA ACTIVE</div>
+      <div id="mic_bar_bg">
+        <div id="mic_bar_fill"></div>
+      </div>
+    </div>
+    <hr>
+    <div class="control-group">
+      <label>姿勢・カメラ制御</label>
+      <button id="btn_reset_pose" class="btn-secondary">正面リセット (顔の向き)</button>
+      <button id="btn_reset_cam" class="btn-secondary">カメラ位置リセット</button>
+      <div style="display: flex; gap: 5px;"><button id="btn_away" class="btn-secondary"
+          style="flex: 1;">離席</button><button id="btn_back" class="btn-secondary" style="flex: 1;">復帰</button></div>
+    </div>
+    <div class="control-group"><label>カメラ位置の調整: <span class="val-disp" id="v_cam_y">0.00</span></label><input
+        type="range" id="s_cam_y" min="-1.0" max="1.0" step="0.01" value="0.0"></div>
+    <div class="control-group"><label>右腕の角度: <span class="val-disp" id="v_l">0</span>°</label><input type="range"
+        id="s_l" min="-90" max="90" step="1" value="-60"></div>
+    <div class="control-group"><label>左腕の角度: <span class="val-disp" id="v_r">0</span>°</label><input type="range"
+        id="s_r" min="-90" max="90" step="1" value="-60"></div>
+    <div class="control-group"><label>まばたき感度: <span class="val-disp" id="v_blink">1.5</span></label><input type="range"
+        id="s_blink" min="1.0" max="3.0" step="0.1" value="1.5"></div>
+    <div class="control-group"><label>マイク感度: <span class="val-disp" id="v_mic">2.5</span></label><input type="range"
+        id="s_mic" min="0.5" max="10.0" step="0.1" value="2.5"></div>
+  </div>
+
+  <div id="video_ui" style="display: none;"><video id="input_video" autoplay playsinline muted></video></div>
+
+  <script type="importmap">
+    { "imports": {
+        "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/",
+        "@pixiv/three-vrm": "https://cdn.jsdelivr.net/npm/@pixiv/three-vrm@2.1.0/lib/three-vrm.module.js",
+        "@mediapipe/tasks-vision": "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.3/vision_bundle.mjs"
+    } }
+  </script>
+
+  <script type="module">
+    import * as THREE from 'three';
+    import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+    import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+    import { VRMLoaderPlugin } from '@pixiv/three-vrm';
+    import { FaceLandmarker, FilesetResolver } from '@mediapipe/tasks-vision';
+
+    const video = document.getElementById("input_video"), connStatus = document.getElementById("conn_status");
+    const micBarFill = document.getElementById("mic_bar_fill"), roomIdInput = document.getElementById("room_id");
+    const psyncToggle = document.getElementById("psync_mode"), modelBadge = document.getElementById("model_type_badge");
+    const s_cam_y = document.getElementById("s_cam_y"), s_l = document.getElementById("s_l"), s_r = document.getElementById("s_r");
+    const s_blink = document.getElementById("s_blink"), s_mic = document.getElementById("s_mic");
+
+    let currentVrm, faceLandmarker, lastVideoTime = -1;
+    let isVRM0 = false;
+    let peer, connections = [], audioContext, analyser, dataArray, currentVolume = 0;
+    let modelHasPS = false, shouldResetPose = false, controls;
+    let headWorldY = 1.2, targetCamYOffset = 0, currentCamYOffset = 0;
+
+    // --- メモリ節約用: オブジェクトの事前生成 ---
+    const offsetRotation = new THREE.Quaternion(), tempQuat1 = new THREE.Quaternion(), tempQuat2 = new THREE.Quaternion(), tempMatrix = new THREE.Matrix4();
+    const vData = { h: 0, la: 0, ra: 0, b: 1.5, s: {}, r: null, s_scale: 1.0, camPos: [0, 0, 0], camTarget: [0, 0, 0] };
+    const VRM_STANDARD_EXPRESSIONS = ['happy', 'angry', 'sad', 'relaxed', 'surprised', 'blinkLeft', 'blinkRight', 'aa', 'ih', 'ou', 'ee', 'oh', 'lookUp', 'lookDown', 'lookLeft', 'lookRight'];
+
+    // --- カメラ・制御イベント ---
+    document.getElementById("btn_reset_cam").onclick = () => {
+      s_cam_y.value = 0; targetCamYOffset = 0; currentCamYOffset = 0;
+      const zPos = isVRM0 ? -1.5 : 1.5;
+      camera.position.set(0, headWorldY, zPos); controls.target.set(0, headWorldY, 0); controls.update();
+    };
+    document.getElementById("btn_away").onclick = () => { targetCamYOffset = 2.0; };
+    document.getElementById("btn_back").onclick = () => { targetCamYOffset = parseFloat(s_cam_y.value); };
+
+    function isPerfectSyncModel(vrm) {
+      if (!vrm?.expressionManager) return false;
+      return ['browDownLeft', 'cheekPuff', 'noseSneerLeft'].some(n => vrm.expressionManager.getExpression(n) != null);
+    }
+
+    function mapARKitToVRM(shapes, bSense) {
+      const get = (n) => shapes[n] || 0;
+      const mapped = {};
+      mapped.blinkLeft = Math.min(1.0, get('eyeBlinkLeft') * bSense);
+      mapped.blinkRight = Math.min(1.0, get('eyeBlinkRight') * bSense);
+      const jaw = get('jawOpen'), pucker = get('mouthPucker'), funnel = get('mouthFunnel');
+      const stretch = (get('mouthStretchLeft') + get('mouthStretchRight')) / 2, smile = (get('mouthSmileLeft') + get('mouthSmileRight')) / 2;
+      mapped.aa = Math.min(1.0, jaw * Math.max(0.2, 1.0 - pucker - funnel));
+      mapped.ih = Math.min(1.0, Math.max(stretch, smile * 0.5) * Math.max(0, 1.0 - jaw * 1.5) * 1.2);
+      mapped.ou = Math.min(1.0, pucker);
+      mapped.ee = Math.min(1.0, jaw * Math.max(stretch, smile * 0.3) * 2.0);
+      mapped.oh = Math.min(1.0, funnel);
+      mapped.happy = Math.min(0.5, Math.max(0, smile - 0.25) * 0.8);
+      mapped.angry = Math.min(0.5, Math.max(0, (get('mouthFrownLeft') * 0.6 + get('browDownLeft') * 0.4) - 0.2));
+      mapped.surprised = Math.min(0.5, Math.max(0, (get('eyeWideLeft') * 0.5 + get('browInnerUp') * 0.5) - 0.15));
+      return mapped;
+    }
+
+    let savedRoomId = localStorage.getItem('last_room_id') || ("vrm-" + Math.random().toString(36).substring(2, 10));
+    localStorage.setItem('last_room_id', savedRoomId);
+    roomIdInput.value = savedRoomId;
+
+    document.getElementById("btn_copy").onclick = () => {
+      navigator.clipboard.writeText(roomIdInput.value).then(() => {
+        const b = document.getElementById("btn_copy"); b.innerText = "OK!"; setTimeout(() => b.innerText = "コピー", 2000);
+      });
+    };
+    document.getElementById("btn_reset_pose").onclick = () => { shouldResetPose = true; };
+
+    const dbName = "VRM_Storage", storeName = "models";
+    const openDb = () => new Promise(res => {
+      const r = indexedDB.open(dbName, 1); r.onupgradeneeded = e => e.target.result.createObjectStore(storeName); r.onsuccess = e => res(e.target.result);
+    });
+
+    document.getElementById("vrm_file").onchange = async (e) => {
+      const f = e.target.files[0]; if (!f) return;
+      const db = await openDb(); db.transaction(storeName, "readwrite").objectStore(storeName).put(f, "last_vrm");
+      loadVRM(f);
+    };
+
+    function loadVRM(blob) {
+      const url = URL.createObjectURL(blob);
+      new GLTFLoader().register(p => new VRMLoaderPlugin(p)).load(url, gltf => {
+        if (currentVrm) scene.remove(currentVrm.scene);
+        currentVrm = gltf.userData.vrm;
+        isVRM0 = !!gltf.parser.json.extensions?.VRM;
+        scene.add(gltf.scene);
+        currentVrm.scene.scale.set(1, 1, 1);
+        const head = currentVrm.humanoid.getNormalizedBoneNode("head");
+        if (head) {
+          const wp = new THREE.Vector3(); head.getWorldPosition(wp);
+          const zPos = isVRM0 ? -1.5 : 1.5; camera.position.set(0, headWorldY, zPos);
+          headWorldY = wp.y; targetCamYOffset = parseFloat(s_cam_y.value); currentCamYOffset = targetCamYOffset;
+          controls.target.set(0, headWorldY + targetCamYOffset, 0); controls.update();
+        }
+        modelHasPS = isPerfectSyncModel(currentVrm);
+        modelBadge.style.display = "block"; modelBadge.innerText = modelHasPS ? "PS対応" : "自動マッピング";
+        modelBadge.className = modelHasPS ? "badge-ps" : "badge-mapped";
+        connStatus.innerText = "VRM準備OK"; connStatus.style.color = "#00ff00";
+      });
+    }
+
+    (async () => {
+      const db = await openDb();
+      const r = db.transaction(storeName).objectStore(storeName).get("last_vrm");
+      r.onsuccess = () => { if (r.result) loadVRM(r.result); };
+    })();
+
+    document.getElementById("btn_start").onclick = async () => {
+      if (!currentVrm) return;
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: { width: 640, height: 480 } });
+        video.srcObject = stream; video.play();
+        document.getElementById("video_ui").style.display = "none";
+        audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        const src = audioContext.createMediaStreamSource(stream);
+        analyser = audioContext.createAnalyser(); analyser.fftSize = 256; src.connect(analyser);
+        dataArray = new Uint8Array(analyser.frequencyBinCount);
+        if (peer) peer.destroy();
+        peer = new Peer(roomIdInput.value);
+        peer.on('open', id => { connStatus.innerText = "配信中: " + id; document.getElementById("live_indicator").style.display = "block"; });
+        peer.on('connection', c => { c.on('open', () => { connections.push(c); }); c.on('close', () => { connections = connections.filter(x => x !== c); }); });
+      } catch (e) { alert("カメラ/マイク起動失敗"); }
+    };
+
+function animate() {
+      requestAnimationFrame(animate);
+      
+      // 1. UI・カメラ制御（軽量）
+      if (controls) {
+        const sVal = parseFloat(s_cam_y.value);
+        if (Math.floor(performance.now()) % 10 === 0) {
+            document.getElementById("v_cam_y").innerText = sVal.toFixed(2);
+        }
+        if (targetCamYOffset !== 2.0) targetCamYOffset = sVal;
+        currentCamYOffset += (targetCamYOffset - currentCamYOffset) * 0.1;
+        controls.target.y = headWorldY + currentCamYOffset;
+        controls.update();
+      }
+      
+      // 2. マイク解析
+      if (analyser) {
+        analyser.getByteFrequencyData(dataArray);
+        currentVolume = (dataArray.reduce((a, b) => a + b, 0) / dataArray.length) / 128.0;
+        micBarFill.style.width = Math.min(100, currentVolume * 400) + "%";
+      }
+
+      // 3. トラッキング & VRM更新（ビデオフレーム更新時のみ）
+      if (video.readyState >= 2 && video.currentTime !== lastVideoTime) {
+        lastVideoTime = video.currentTime;
+        const res = faceLandmarker ? faceLandmarker.detectForVideo(video, performance.now()) : null;
+        
+        if (currentVrm) {
+          const l = parseFloat(s_l.value), r = parseFloat(s_r.value), bS = parseFloat(s_blink.value), mS = parseFloat(s_mic.value);
+          document.getElementById("v_l").innerText = l; document.getElementById("v_r").innerText = r;
+          document.getElementById("v_blink").innerText = bS; document.getElementById("v_mic").innerText = mS;
+
+          // 送信データの基本セット
+          vData.la = l; vData.ra = r; vData.b = bS;
+          vData.camPos = [camera.position.x, camera.position.y, camera.position.z];
+          vData.camTarget = [controls.target.x, controls.target.y, controls.target.z];
+
+          // 腕の制御（安定版の鏡像ロジック）
+          const aL = currentVrm.humanoid.getNormalizedBoneNode("rightUpperArm");
+          const aR = currentVrm.humanoid.getNormalizedBoneNode("leftUpperArm");
+          if (aL) aL.rotation.z = THREE.MathUtils.degToRad(-l); 
+          if (aR) aR.rotation.z = THREE.MathUtils.degToRad(r);
+
+          const exp = currentVrm.expressionManager;
+          if (res && res.faceBlendshapes.length > 0) {
+            const categories = res.faceBlendshapes[0].categories;
+            const shapes = {}; categories.forEach(c => { shapes[c.categoryName] = c.score; });
+            const mO = Math.max(shapes.jawOpen || 0, currentVolume * mS);
+
+            // 表情更新（リセットループなし・直接上書きで軽量化）
+            if (psyncToggle.checked) {
+              if (modelHasPS) {
+                // 鏡像ウインクのクロス代入
+                categories.forEach(c => { 
+                    if (c.categoryName === 'eyeBlinkLeft') exp.setValue("blinkLeft", Math.min(1.0, shapes.eyeBlinkRight * bS));
+                    else if (c.categoryName === 'eyeBlinkRight') exp.setValue("blinkRight", Math.min(1.0, shapes.eyeBlinkLeft * bS));
+                    else if (c.categoryName !== 'jawOpen') exp.setValue(c.categoryName, c.score); 
+                });
+                exp.setValue("aa", mO);
+              } else {
+                const mapped = mapARKitToVRM({ ...shapes, jawOpen: mO }, bS);
+                Object.keys(mapped).forEach(k => exp.setValue(k, mapped[k]));
+              }
+              vData.s = { ...shapes, jawOpen: mO };
+            }
+
+            // 視線ボーン（Sender自身の表示用・鏡像クロス）
+            const lE = currentVrm.humanoid.getNormalizedBoneNode("rightEye"), rE = currentVrm.humanoid.getNormalizedBoneNode("leftEye");
+            if (lE && rE) {
+              const mp = 0.174, my = 0.122;
+              lE.rotation.set(((shapes.eyeLookDownRight||0)-(shapes.eyeLookUpRight||0))*mp, -((shapes.eyeLookOutRight||0)-(shapes.eyeLookInRight||0))*-my, 0);
+              rE.rotation.set(((shapes.eyeLookDownLeft||0)-(shapes.eyeLookUpLeft||0))*mp, -((shapes.eyeLookInLeft||0)-(shapes.eyeLookOutLeft||0))*-my, 0);
+            }
+          }
+
+          // 頭部回転（Quaternion鏡像）
+          if (res && res.facialTransformationMatrixes.length > 0) {
+            tempMatrix.fromArray(res.facialTransformationMatrixes[0].data);
+            tempQuat1.setFromRotationMatrix(tempMatrix);
+            if (shouldResetPose) { offsetRotation.copy(tempQuat1).invert(); shouldResetPose = false; }
+            tempQuat2.multiplyQuaternions(offsetRotation, tempQuat1);
+            
+            vData.r = [tempQuat2.x, -tempQuat2.y, -tempQuat2.z, tempQuat2.w];
+            
+            tempQuat1.set(vData.r[0], vData.r[1], vData.r[2], vData.r[3]).normalize();
+            const halfQuat = new THREE.Quaternion().set(0, 0, 0, 1).slerp(tempQuat1, 0.5);
+            const head = currentVrm.humanoid.getNormalizedBoneNode("head"), neck = currentVrm.humanoid.getNormalizedBoneNode("neck");
+            if (head && neck) { neck.quaternion.copy(halfQuat); head.quaternion.copy(halfQuat); }
+          }
+          
+          // 送信（1フレームに1回）
+          for (let i = connections.length - 1; i >= 0; i--) { if (connections[i].open) connections[i].send(vData); }
+          currentVrm.update(0.016);
+        }
+      }
+      renderer.render(scene, camera);
+    }
+    
+    const scene = new THREE.Scene(), camera = new THREE.PerspectiveCamera(30, window.innerWidth / window.innerHeight, 0.1, 20);
+    camera.position.set(0, 1.2, 1.5);
+    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+    renderer.setSize(window.innerWidth, window.innerHeight); document.body.appendChild(renderer.domElement);
+    scene.add(camera, new THREE.DirectionalLight(0xffffff, Math.PI), new THREE.AmbientLight(0xffffff, 0.5));
+    controls = new OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true; controls.enablePan = false; controls.minDistance = 0.5; controls.maxDistance = 5.0; controls.target.set(0, 1.2, 0);
+
+    window.addEventListener('resize', () => {
+      camera.aspect = window.innerWidth / window.innerHeight; camera.updateProjectionMatrix(); renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+
+    async function setupTracking() {
+      const fileset = await FilesetResolver.forVisionTasks("https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.3/wasm");
+      faceLandmarker = await FaceLandmarker.createFromOptions(fileset, {
+        baseOptions: { modelAssetPath: `https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task`, delegate: "GPU" },
+        outputFaceBlendshapes: true, outputFacialTransformationMatrixes: true, runningMode: "VIDEO"
+      });
+      animate();
+    }
+    setupTracking();
+  </script>
+</body>
+
+</html>
