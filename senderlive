@@ -215,8 +215,10 @@
       <div style="display: flex; gap: 5px;"><button id="btn_away" class="btn-secondary"
           style="flex: 1;">離席</button><button id="btn_back" class="btn-secondary" style="flex: 1;">復帰</button></div>
     </div>
-    <div class="control-group"><label>カメラ位置の調整: <span class="val-disp" id="v_cam_y">0.00</span></label><input
+    <div class="control-group"><label>カメラ位置の調整(上下): <span class="val-disp" id="v_cam_y">0.00</span></label><input
         type="range" id="s_cam_y" min="-1.0" max="1.0" step="0.01" value="0.0"></div>
+    <div class="control-group"><label>カメラ位置の調整(左右): <span class="val-disp" id="v_cam_x">0.00</span></label><input
+        type="range" id="s_cam_x" min="-1.5" max="1.5" step="0.01" value="0.0"></div>
     <div class="control-group"><label>右腕の角度: <span class="val-disp" id="v_l">0</span>°</label><input type="range"
         id="s_l" min="-90" max="90" step="1" value="-60"></div>
     <div class="control-group"><label>左腕の角度: <span class="val-disp" id="v_r">0</span>°</label><input type="range"
@@ -225,6 +227,30 @@
         id="s_blink" min="1.0" max="3.0" step="0.1" value="1.5"></div>
     <div class="control-group"><label>マイク感度: <span class="val-disp" id="v_mic">2.5</span></label><input type="range"
         id="s_mic" min="0.5" max="10.0" step="0.1" value="2.5"></div>
+    <hr>
+    <div class="control-group">
+      <label>背景画像 (Receiverに表示):</label>
+      <input type="file" id="bg_file" accept="image/*">
+      <button id="btn_clear_bg" class="btn-secondary">背景を透過 (クリア)</button>
+    </div>
+    <div class="control-group">
+      <label>サムネテキスト (Receiverに表示):</label>
+      <input type="text" id="i_title" placeholder="タイトル (例: 雑談配信)">
+      <input type="text" id="i_subtitle" placeholder="サブタイトル (例: まったり話そう)" style="margin-top: 5px;">
+      <div style="display: flex; gap: 5px; margin-top: 5px; align-items: center;">
+        <select id="s_text_align" style="flex: 1; padding: 4px; background: #222; color: #fff; border: 1px solid #666; border-radius: 4px;">
+          <option value="flex-start">左寄せ</option>
+          <option value="center">中央寄せ</option>
+          <option value="flex-end">右寄せ</option>
+        </select>
+        <input type="color" id="c_title_color" title="タイトル色" value="#ffffff" style="width: 30px; height: 24px; padding: 0; border: none; cursor: pointer;">
+        <input type="color" id="c_subtitle_color" title="サブタイトル色" value="#ffcc00" style="width: 30px; height: 24px; padding: 0; border: none; cursor: pointer;">
+      </div>
+      <div style="display: flex; gap: 5px; margin-top: 5px; align-items: center;">
+        <label style="margin: 0; white-space: nowrap;">サイズ:</label>
+        <input type="range" id="s_text_size" min="0.5" max="2.5" step="0.1" value="1.0" style="flex: 1;">
+      </div>
+    </div>
   </div>
 
   <div id="video_ui" style="display: none;"><video id="input_video" autoplay playsinline muted></video></div>
@@ -248,14 +274,18 @@
     const video = document.getElementById("input_video"), connStatus = document.getElementById("conn_status");
     const micBarFill = document.getElementById("mic_bar_fill"), roomIdInput = document.getElementById("room_id");
     const psyncToggle = document.getElementById("psync_mode"), modelBadge = document.getElementById("model_type_badge");
-    const s_cam_y = document.getElementById("s_cam_y"), s_l = document.getElementById("s_l"), s_r = document.getElementById("s_r");
+    const s_cam_y = document.getElementById("s_cam_y"), s_cam_x = document.getElementById("s_cam_x");
+    const s_l = document.getElementById("s_l"), s_r = document.getElementById("s_r");
     const s_blink = document.getElementById("s_blink"), s_mic = document.getElementById("s_mic");
 
     let currentVrm, faceLandmarker, lastVideoTime = -1;
     let isVRM0 = false;
     let peer, connections = [], audioContext, analyser, dataArray, currentVolume = 0;
     let modelHasPS = false, shouldResetPose = false, controls;
-    let headWorldY = 1.2, targetCamYOffset = 0, currentCamYOffset = 0;
+    let headWorldY = 1.2, targetCamYOffset = 0, currentCamYOffset = 0, targetCamXOffset = 0, currentCamXOffset = 0;
+    let currentBgArrayBuffer = null, currentBgMime = null;
+    let currentTitle = "", currentSubtitle = "";
+    let currentTextAlign = "flex-start", currentTitleColor = "#ffffff", currentSubtitleColor = "#ffcc00", currentTextSize = 1.0;
 
     // --- メモリ節約用: オブジェクトの事前生成 ---
     const offsetRotation = new THREE.Quaternion(), tempQuat1 = new THREE.Quaternion(), tempQuat2 = new THREE.Quaternion(), tempMatrix = new THREE.Matrix4();
@@ -264,7 +294,9 @@
 
     // --- カメラ・制御イベント ---
     document.getElementById("btn_reset_cam").onclick = () => {
-      s_cam_y.value = 0; targetCamYOffset = 0; currentCamYOffset = 0;
+      s_cam_y.value = 0; s_cam_x.value = 0; 
+      targetCamYOffset = 0; currentCamYOffset = 0;
+      targetCamXOffset = 0; currentCamXOffset = 0;
       const zPos = isVRM0 ? -1.5 : 1.5;
       camera.position.set(0, headWorldY, zPos); controls.target.set(0, headWorldY, 0); controls.update();
     };
@@ -327,9 +359,13 @@
         const head = currentVrm.humanoid.getNormalizedBoneNode("head");
         if (head) {
           const wp = new THREE.Vector3(); head.getWorldPosition(wp);
-          const zPos = isVRM0 ? -1.5 : 1.5; camera.position.set(0, headWorldY, zPos);
-          headWorldY = wp.y; targetCamYOffset = parseFloat(s_cam_y.value); currentCamYOffset = targetCamYOffset;
-          controls.target.set(0, headWorldY + targetCamYOffset, 0); controls.update();
+          headWorldY = wp.y; 
+          targetCamYOffset = parseFloat(s_cam_y.value); currentCamYOffset = targetCamYOffset;
+          targetCamXOffset = parseFloat(s_cam_x.value); currentCamXOffset = targetCamXOffset;
+          const zPos = isVRM0 ? -1.5 : 1.5; 
+          camera.position.set(currentCamXOffset, headWorldY, zPos);
+          controls.target.set(currentCamXOffset, headWorldY + targetCamYOffset, 0); 
+          controls.update();
         }
         modelHasPS = isPerfectSyncModel(currentVrm);
         modelBadge.style.display = "block"; modelBadge.innerText = modelHasPS ? "PS対応" : "自動マッピング";
@@ -344,6 +380,44 @@
       r.onsuccess = () => { if (r.result) loadVRM(r.result); };
     })();
 
+    // 背景画像が選択されたらReceiverに送信する
+    document.getElementById("bg_file").onchange = (e) => {
+      const f = e.target.files[0];
+      if (f) {
+        const reader = new FileReader();
+        reader.onload = (ev) => {
+          currentBgArrayBuffer = ev.target.result;
+          currentBgMime = f.type;
+          const dataPacket = { type: 'bgImage', data: currentBgArrayBuffer, mime: currentBgMime };
+          for (let i = 0; i < connections.length; i++) {
+            if (connections[i].open) connections[i].send(dataPacket);
+          }
+        };
+        reader.readAsArrayBuffer(f);
+      }
+    };
+
+    // テキストオーバーレイの送信
+    function sendTextOverlay() {
+      const dataPacket = { type: 'textOverlay', title: currentTitle, subtitle: currentSubtitle, align: currentTextAlign, titleColor: currentTitleColor, subtitleColor: currentSubtitleColor, textSize: currentTextSize };
+      for (let i = 0; i < connections.length; i++) { if (connections[i].open) connections[i].send(dataPacket); }
+    }
+    document.getElementById("i_title").oninput = (e) => { currentTitle = e.target.value; sendTextOverlay(); };
+    document.getElementById("i_subtitle").oninput = (e) => { currentSubtitle = e.target.value; sendTextOverlay(); };
+    document.getElementById("s_text_align").onchange = (e) => { currentTextAlign = e.target.value; sendTextOverlay(); };
+    document.getElementById("c_title_color").oninput = (e) => { currentTitleColor = e.target.value; sendTextOverlay(); };
+    document.getElementById("c_subtitle_color").oninput = (e) => { currentSubtitleColor = e.target.value; sendTextOverlay(); };
+    document.getElementById("s_text_size").oninput = (e) => { currentTextSize = parseFloat(e.target.value); sendTextOverlay(); };
+
+    // 背景をクリア（透過）する
+    document.getElementById("btn_clear_bg").onclick = () => {
+      currentBgArrayBuffer = null;
+      currentBgMime = null;
+      document.getElementById("bg_file").value = "";
+      const dataPacket = { type: 'bgClear' };
+      for (let i = 0; i < connections.length; i++) { if (connections[i].open) connections[i].send(dataPacket); }
+    };
+
     document.getElementById("btn_start").onclick = async () => {
       if (!currentVrm) return;
       try {
@@ -357,7 +431,17 @@
         if (peer) peer.destroy();
         peer = new Peer(roomIdInput.value);
         peer.on('open', id => { connStatus.innerText = "配信中: " + id; document.getElementById("live_indicator").style.display = "block"; });
-        peer.on('connection', c => { c.on('open', () => { connections.push(c); }); c.on('close', () => { connections = connections.filter(x => x !== c); }); });
+        peer.on('connection', c => { 
+          c.on('open', () => { 
+            connections.push(c); 
+            // 接続してきたReceiverに、現在設定されている背景画像を送る
+            if (currentBgArrayBuffer) { c.send({ type: 'bgImage', data: currentBgArrayBuffer, mime: currentBgMime }); }
+            else { c.send({ type: 'bgClear' }); }
+            // 接続してきたReceiverに、現在のテキストオーバーレイ状態を送る
+            c.send({ type: 'textOverlay', title: currentTitle, subtitle: currentSubtitle, align: currentTextAlign, titleColor: currentTitleColor, subtitleColor: currentSubtitleColor, textSize: currentTextSize });
+          }); 
+          c.on('close', () => { connections = connections.filter(x => x !== c); }); 
+        });
       } catch (e) { alert("カメラ/マイク起動失敗"); }
     };
 
@@ -366,12 +450,21 @@ function animate() {
       
       // 1. UI・カメラ制御（軽量）
       if (controls) {
-        const sVal = parseFloat(s_cam_y.value);
+        const sValY = parseFloat(s_cam_y.value);
+        const sValX = parseFloat(s_cam_x.value);
         if (Math.floor(performance.now()) % 10 === 0) {
-            document.getElementById("v_cam_y").innerText = sVal.toFixed(2);
+            document.getElementById("v_cam_y").innerText = sValY.toFixed(2);
+            document.getElementById("v_cam_x").innerText = sValX.toFixed(2);
         }
-        if (targetCamYOffset !== 2.0) targetCamYOffset = sVal;
+        if (targetCamYOffset !== 2.0) targetCamYOffset = sValY;
+        targetCamXOffset = sValX;
+
+        const diffX = (targetCamXOffset - currentCamXOffset) * 0.1;
+        currentCamXOffset += diffX;
         currentCamYOffset += (targetCamYOffset - currentCamYOffset) * 0.1;
+
+        controls.target.x += diffX;
+        camera.position.x += diffX;
         controls.target.y = headWorldY + currentCamYOffset;
         controls.update();
       }
