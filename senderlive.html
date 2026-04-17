@@ -232,6 +232,10 @@
       <label>背景画像 (Receiverに表示):</label>
       <input type="file" id="bg_file" accept="image/*">
       <button id="btn_clear_bg" class="btn-secondary">背景を透過 (クリア)</button>
+      <div style="display: flex; gap: 5px; margin-top: 5px; align-items: center;">
+        <label style="margin: 0; white-space: nowrap;">ぼかし:</label>
+        <input type="range" id="s_bg_blur" min="0" max="30" step="1" value="0" style="flex: 1;">
+      </div>
     </div>
     <div class="control-group">
       <label>サムネテキスト (Receiverに表示):</label>
@@ -249,6 +253,15 @@
       <div style="display: flex; gap: 5px; margin-top: 5px; align-items: center;">
         <label style="margin: 0; white-space: nowrap;">サイズ:</label>
         <input type="range" id="s_text_size" min="0.5" max="2.5" step="0.1" value="1.0" style="flex: 1;">
+      </div>
+      <div style="display: flex; gap: 5px; margin-top: 5px; align-items: center;">
+        <label style="margin: 0; white-space: nowrap;">フォント:</label>
+        <select id="s_text_font" style="flex: 1; padding: 4px; background: #222; color: #fff; border: 1px solid #666; border-radius: 4px;">
+          <option value="'Impact', 'Arial Black', sans-serif">インパクト (標準)</option>
+          <option value="'M PLUS Rounded 1c', sans-serif">ポップ (丸ゴシック)</option>
+          <option value="'Noto Sans JP', sans-serif">モダン (ゴシック)</option>
+          <option value="'Shippori Mincho', serif">きれいめ (明朝)</option>
+        </select>
       </div>
     </div>
   </div>
@@ -286,6 +299,8 @@
     let currentBgArrayBuffer = null, currentBgMime = null;
     let currentTitle = "", currentSubtitle = "";
     let currentTextAlign = "flex-start", currentTitleColor = "#ffffff", currentSubtitleColor = "#ffcc00", currentTextSize = 1.0;
+    let currentBgBlur = 0;
+    let currentTextFont = "'Impact', 'Arial Black', sans-serif";
 
     // --- メモリ節約用: オブジェクトの事前生成 ---
     const offsetRotation = new THREE.Quaternion(), tempQuat1 = new THREE.Quaternion(), tempQuat2 = new THREE.Quaternion(), tempMatrix = new THREE.Matrix4();
@@ -399,7 +414,7 @@
 
     // テキストオーバーレイの送信
     function sendTextOverlay() {
-      const dataPacket = { type: 'textOverlay', title: currentTitle, subtitle: currentSubtitle, align: currentTextAlign, titleColor: currentTitleColor, subtitleColor: currentSubtitleColor, textSize: currentTextSize };
+      const dataPacket = { type: 'textOverlay', title: currentTitle, subtitle: currentSubtitle, align: currentTextAlign, titleColor: currentTitleColor, subtitleColor: currentSubtitleColor, textSize: currentTextSize, fontFamily: currentTextFont };
       for (let i = 0; i < connections.length; i++) { if (connections[i].open) connections[i].send(dataPacket); }
     }
     document.getElementById("i_title").oninput = (e) => { currentTitle = e.target.value; sendTextOverlay(); };
@@ -408,6 +423,14 @@
     document.getElementById("c_title_color").oninput = (e) => { currentTitleColor = e.target.value; sendTextOverlay(); };
     document.getElementById("c_subtitle_color").oninput = (e) => { currentSubtitleColor = e.target.value; sendTextOverlay(); };
     document.getElementById("s_text_size").oninput = (e) => { currentTextSize = parseFloat(e.target.value); sendTextOverlay(); };
+    document.getElementById("s_text_font").onchange = (e) => { currentTextFont = e.target.value; sendTextOverlay(); };
+
+    // 背景ぼかしの送信
+    function sendBgBlur() {
+      const dataPacket = { type: 'bgBlur', blur: currentBgBlur };
+      for (let i = 0; i < connections.length; i++) { if (connections[i].open) connections[i].send(dataPacket); }
+    }
+    document.getElementById("s_bg_blur").oninput = (e) => { currentBgBlur = e.target.value; sendBgBlur(); };
 
     // 背景をクリア（透過）する
     document.getElementById("btn_clear_bg").onclick = () => {
@@ -437,8 +460,9 @@
             // 接続してきたReceiverに、現在設定されている背景画像を送る
             if (currentBgArrayBuffer) { c.send({ type: 'bgImage', data: currentBgArrayBuffer, mime: currentBgMime }); }
             else { c.send({ type: 'bgClear' }); }
+            c.send({ type: 'bgBlur', blur: currentBgBlur });
             // 接続してきたReceiverに、現在のテキストオーバーレイ状態を送る
-            c.send({ type: 'textOverlay', title: currentTitle, subtitle: currentSubtitle, align: currentTextAlign, titleColor: currentTitleColor, subtitleColor: currentSubtitleColor, textSize: currentTextSize });
+            c.send({ type: 'textOverlay', title: currentTitle, subtitle: currentSubtitle, align: currentTextAlign, titleColor: currentTitleColor, subtitleColor: currentSubtitleColor, textSize: currentTextSize, fontFamily: currentTextFont });
           }); 
           c.on('close', () => { connections = connections.filter(x => x !== c); }); 
         });
