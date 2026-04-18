@@ -498,22 +498,39 @@
 
         // 1. UI・カメラ制御（軽量）
         if (controls) {
+          // スライダーの値を取得
           const sValY = parseFloat(s_cam_y.value);
           const sValX = parseFloat(s_cam_x.value);
           if (Math.floor(performance.now()) % 10 === 0) {
             document.getElementById("v_cam_y").innerText = sValY.toFixed(2);
             document.getElementById("v_cam_x").innerText = sValX.toFixed(2);
           }
+
+          // --- Y軸（上下）の移動処理 ---
+          // 離席中でなければ、スライダーの値を目標オフセットに設定
           if (targetCamYOffset !== 2.0) targetCamYOffset = sValY;
-          targetCamXOffset = sValX;
-
-          currentCamXOffset += (targetCamXOffset - currentCamXOffset) * 0.1;
+          
+          // 前フレームのオフセットを保持
+          const lastCamYOffset = currentCamYOffset;
+          // 現在のオフセットを目標値に近づける（Lerp）
           currentCamYOffset += (targetCamYOffset - currentCamYOffset) * 0.1;
+          // 前フレームからの変化量を計算
+          const deltaY = currentCamYOffset - lastCamYOffset;
 
-          // 物理的な移動をヤメて、レンズの描画枠だけを横にスライドさせる
+          // 変化量があれば、カメラとターゲットの両方を同じ量だけ動かすことで、ズーム処理との干渉を避ける
+          if (Math.abs(deltaY) > 0.0001) {
+            camera.position.y += deltaY;
+            controls.target.y += deltaY;
+          }
+
+          // --- X軸（左右）の移動処理 ---
+          targetCamXOffset = sValX;
+          currentCamXOffset += (targetCamXOffset - currentCamXOffset) * 0.1;
+          // レンズの描画枠をスライドさせる方式
           const w = window.innerWidth, h = window.innerHeight;
           camera.setViewOffset(w, h, -currentCamXOffset * w * 0.5, 0, w, h);
-          controls.target.y = headWorldY + currentCamYOffset;
+
+          // 最後に OrbitControls を更新して、ユーザー操作（回転・ズーム）を反映
           controls.update();
         }
 
@@ -608,7 +625,7 @@
       scene.add(camera, new THREE.DirectionalLight(0xffffff, Math.PI), new THREE.AmbientLight(0xffffff, 0.5));
       controls = new OrbitControls(camera, renderer.domElement);
       controls.enableDamping = true; controls.enablePan = false; controls.minDistance = 0.5; controls.maxDistance = 5.0; controls.target.set(0, 1.2, 0);
-    　controls.zoomSpeed = 1.0; 
+      controls.zoomSpeed = 1.0; // スクロール時のズーム速度をデフォルト値に戻して滑らかにする
 
       window.addEventListener('resize', () => {
         camera.aspect = window.innerWidth / window.innerHeight; camera.updateProjectionMatrix(); renderer.setSize(window.innerWidth, window.innerHeight);
