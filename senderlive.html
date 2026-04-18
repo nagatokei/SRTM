@@ -243,13 +243,16 @@
       <input type="text" id="i_title" placeholder="タイトル (例: 雑談配信)">
       <input type="text" id="i_subtitle" placeholder="サブタイトル (例: まったり話そう)" style="margin-top: 5px;">
       <div style="display: flex; gap: 5px; margin-top: 5px; align-items: center;">
-        <select id="s_text_align" style="flex: 1; padding: 4px; background: #222; color: #fff; border: 1px solid #666; border-radius: 4px;">
+        <select id="s_text_align"
+          style="flex: 1; padding: 4px; background: #222; color: #fff; border: 1px solid #666; border-radius: 4px;">
           <option value="flex-start">左寄せ</option>
           <option value="center">中央寄せ</option>
           <option value="flex-end">右寄せ</option>
         </select>
-        <input type="color" id="c_title_color" title="タイトル色" value="#ffffff" style="width: 30px; height: 24px; padding: 0; border: none; cursor: pointer;">
-        <input type="color" id="c_subtitle_color" title="サブタイトル色" value="#ffcc00" style="width: 30px; height: 24px; padding: 0; border: none; cursor: pointer;">
+        <input type="color" id="c_title_color" title="タイトル色" value="#ffffff"
+          style="width: 30px; height: 24px; padding: 0; border: none; cursor: pointer;">
+        <input type="color" id="c_subtitle_color" title="サブタイトル色" value="#ffcc00"
+          style="width: 30px; height: 24px; padding: 0; border: none; cursor: pointer;">
       </div>
       <div style="display: flex; gap: 5px; margin-top: 5px; align-items: center;">
         <label style="margin: 0; white-space: nowrap;">サイズ:</label>
@@ -257,7 +260,8 @@
       </div>
       <div style="display: flex; gap: 5px; margin-top: 5px; align-items: center;">
         <label style="margin: 0; white-space: nowrap;">フォント:</label>
-        <select id="s_text_font" style="flex: 1; padding: 4px; background: #222; color: #fff; border: 1px solid #666; border-radius: 4px;">
+        <select id="s_text_font"
+          style="flex: 1; padding: 4px; background: #222; color: #fff; border: 1px solid #666; border-radius: 4px;">
           <option value="'Impact', 'Arial Black', sans-serif">インパクト (標準)</option>
           <option value="'M PLUS Rounded 1c', sans-serif">ポップ (丸ゴシック)</option>
           <option value="'Noto Sans JP', sans-serif">モダン (ゴシック)</option>
@@ -305,15 +309,14 @@
 
     // --- メモリ節約用: オブジェクトの事前生成 ---
     const offsetRotation = new THREE.Quaternion(), tempQuat1 = new THREE.Quaternion(), tempQuat2 = new THREE.Quaternion(), tempMatrix = new THREE.Matrix4();
-    const vData = { h: 0, x: 0, la: 0, ra: 0, b: 1.5, s: {}, r: null, s_scale: 1.0, camPos: [0, 0, 0], camTarget: [0, 0, 0] };
+    const vData = { h: 0, la: 0, ra: 0, b: 1.5, s: {}, r: null, s_scale: 1.0, camPos: [0, 0, 0], camTarget: [0, 0, 0] };
     const VRM_STANDARD_EXPRESSIONS = ['happy', 'angry', 'sad', 'relaxed', 'surprised', 'blinkLeft', 'blinkRight', 'aa', 'ih', 'ou', 'ee', 'oh', 'lookUp', 'lookDown', 'lookLeft', 'lookRight'];
 
     // --- カメラ・制御イベント ---
     document.getElementById("btn_reset_cam").onclick = () => {
-      s_cam_y.value = 0; s_cam_x.value = 0; 
+      s_cam_y.value = 0; s_cam_x.value = 0;
       targetCamYOffset = 0; currentCamYOffset = 0;
       targetCamXOffset = 0; currentCamXOffset = 0;
-      if (currentVrm) currentVrm.scene.position.x = 0;
       const zPos = isVRM0 ? -1.5 : 1.5;
       camera.position.set(0, headWorldY, zPos); controls.target.set(0, headWorldY, 0); controls.update();
     };
@@ -376,12 +379,12 @@
         const head = currentVrm.humanoid.getNormalizedBoneNode("head");
         if (head) {
           const wp = new THREE.Vector3(); head.getWorldPosition(wp);
-          headWorldY = wp.y; 
+          headWorldY = wp.y;
           targetCamYOffset = parseFloat(s_cam_y.value); currentCamYOffset = targetCamYOffset;
           targetCamXOffset = parseFloat(s_cam_x.value); currentCamXOffset = targetCamXOffset;
-          const zPos = isVRM0 ? -1.5 : 1.5; 
-          camera.position.set(0, headWorldY, zPos);
-          controls.target.set(0, headWorldY + targetCamYOffset, 0); 
+          const zPos = isVRM0 ? -1.5 : 1.5;
+          camera.position.set(currentCamXOffset, headWorldY, zPos);
+          controls.target.set(currentCamXOffset, headWorldY + targetCamYOffset, 0);
           controls.update();
         }
         modelHasPS = isPerfectSyncModel(currentVrm);
@@ -423,204 +426,203 @@
       }
     };
 
-    // テキストオーバーレイの送信
-    function sendTextOverlay() {
-      const dataPacket = { type: 'textOverlay', title: currentTitle, subtitle: currentSubtitle, align: currentTextAlign, titleColor: currentTitleColor, subtitleColor: currentSubtitleColor, textSize: currentTextSize, fontFamily: currentTextFont };
-      for (let i = 0; i < connections.length; i++) { if (connections[i].open) connections[i].send(dataPacket); }
-    }
-    document.getElementById("i_title").oninput = (e) => { currentTitle = e.target.value; sendTextOverlay(); };
-    document.getElementById("i_subtitle").oninput = (e) => { currentSubtitle = e.target.value; sendTextOverlay(); };
-    document.getElementById("s_text_align").onchange = (e) => { currentTextAlign = e.target.value; sendTextOverlay(); };
-    document.getElementById("c_title_color").oninput = (e) => { currentTitleColor = e.target.value; sendTextOverlay(); };
-    document.getElementById("c_subtitle_color").oninput = (e) => { currentSubtitleColor = e.target.value; sendTextOverlay(); };
-    document.getElementById("s_text_size").oninput = (e) => { currentTextSize = parseFloat(e.target.value); sendTextOverlay(); };
-    document.getElementById("s_text_font").onchange = (e) => { currentTextFont = e.target.value; sendTextOverlay(); };
+      // テキストオーバーレイの送信
+      function sendTextOverlay() {
+        const dataPacket = { type: 'textOverlay', title: currentTitle, subtitle: currentSubtitle, align: currentTextAlign, titleColor: currentTitleColor, subtitleColor: currentSubtitleColor, textSize: currentTextSize, fontFamily: currentTextFont };
+        for (let i = 0; i < connections.length; i++) { if (connections[i].open) connections[i].send(dataPacket); }
+      }
+      document.getElementById("i_title").oninput = (e) => { currentTitle = e.target.value; sendTextOverlay(); };
+      document.getElementById("i_subtitle").oninput = (e) => { currentSubtitle = e.target.value; sendTextOverlay(); };
+      document.getElementById("s_text_align").onchange = (e) => { currentTextAlign = e.target.value; sendTextOverlay(); };
+      document.getElementById("c_title_color").oninput = (e) => { currentTitleColor = e.target.value; sendTextOverlay(); };
+      document.getElementById("c_subtitle_color").oninput = (e) => { currentSubtitleColor = e.target.value; sendTextOverlay(); };
+      document.getElementById("s_text_size").oninput = (e) => { currentTextSize = parseFloat(e.target.value); sendTextOverlay(); };
+      document.getElementById("s_text_font").onchange = (e) => { currentTextFont = e.target.value; sendTextOverlay(); };
 
-    // 背景ぼかしの送信
-    function sendBgBlur() {
-      const dataPacket = { type: 'bgBlur', blur: currentBgBlur };
-      for (let i = 0; i < connections.length; i++) { if (connections[i].open) connections[i].send(dataPacket); }
-    }
-    document.getElementById("s_bg_blur").oninput = (e) => { currentBgBlur = e.target.value; sendBgBlur(); };
+      // 背景ぼかしの送信
+      function sendBgBlur() {
+        const dataPacket = { type: 'bgBlur', blur: currentBgBlur };
+        for (let i = 0; i < connections.length; i++) { if (connections[i].open) connections[i].send(dataPacket); }
+      }
+      document.getElementById("s_bg_blur").oninput = (e) => { currentBgBlur = e.target.value; sendBgBlur(); };
 
-    // 背景をクリア（透過）する
-    document.getElementById("btn_clear_bg").onclick = () => {
-      currentBgArrayBuffer = null;
-      currentBgMime = null;
-      document.getElementById("bg_file").value = "";
-      const dataPacket = { type: 'bgClear' };
-      for (let i = 0; i < connections.length; i++) { if (connections[i].open) connections[i].send(dataPacket); }
-    };
+      // 背景をクリア（透過）する
+      document.getElementById("btn_clear_bg").onclick = () => {
+        currentBgArrayBuffer = null;
+        currentBgMime = null;
+        document.getElementById("bg_file").value = "";
+        const dataPacket = { type: 'bgClear' };
+        for (let i = 0; i < connections.length; i++) { if (connections[i].open) connections[i].send(dataPacket); }
+      };
 
-    document.getElementById("btn_start").onclick = async () => {
-      if (!currentVrm) return;
-      try {
-        const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: { width: 640, height: 480 } });
-        video.srcObject = stream; video.play();
-        document.getElementById("video_ui").style.display = "none";
-        audioContext = new (window.AudioContext || window.webkitAudioContext)();
-        const src = audioContext.createMediaStreamSource(stream);
-        analyser = audioContext.createAnalyser(); analyser.fftSize = 256; src.connect(analyser);
-        dataArray = new Uint8Array(analyser.frequencyBinCount);
-        if (peer) peer.destroy();
-        peer = new Peer(roomIdInput.value);
-        peer.on('open', id => { connStatus.innerText = "配信中: " + id; document.getElementById("live_indicator").style.display = "block"; });
-        peer.on('connection', c => { 
-          c.on('open', () => { 
-            connections.push(c); 
-            // 接続してきたReceiverに、現在設定されている背景画像を送る
-            if (currentBgArrayBuffer) { c.send({ type: 'bgImage', data: currentBgArrayBuffer, mime: currentBgMime }); }
-            else { c.send({ type: 'bgClear' }); }
-            c.send({ type: 'bgBlur', blur: currentBgBlur });
-            // 接続してきたReceiverに、現在のテキストオーバーレイ状態を送る
-            c.send({ type: 'textOverlay', title: currentTitle, subtitle: currentSubtitle, align: currentTextAlign, titleColor: currentTitleColor, subtitleColor: currentSubtitleColor, textSize: currentTextSize, fontFamily: currentTextFont });
-          }); 
+      document.getElementById("btn_start").onclick = async () => {
+        if (!currentVrm) return;
+        try {
+          const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: { width: 640, height: 480 } });
+          video.srcObject = stream; video.play();
+          document.getElementById("video_ui").style.display = "none";
+          audioContext = new (window.AudioContext || window.webkitAudioContext)();
+          const src = audioContext.createMediaStreamSource(stream);
+          analyser = audioContext.createAnalyser(); analyser.fftSize = 256; src.connect(analyser);
+          dataArray = new Uint8Array(analyser.frequencyBinCount);
+          if (peer) peer.destroy();
+          peer = new Peer(roomIdInput.value);
+          peer.on('open', id => { connStatus.innerText = "配信中: " + id; document.getElementById("live_indicator").style.display = "block"; });
+          peer.on('connection', c => {
+            c.on('open', () => {
+              connections.push(c);
+              // 接続してきたReceiverに、現在設定されている背景画像を送る
+              if (currentBgArrayBuffer) { c.send({ type: 'bgImage', data: currentBgArrayBuffer, mime: currentBgMime }); }
+              else { c.send({ type: 'bgClear' }); }
+              c.send({ type: 'bgBlur', blur: currentBgBlur });
+              // 接続してきたReceiverに、現在のテキストオーバーレイ状態を送る
+              c.send({ type: 'textOverlay', title: currentTitle, subtitle: currentSubtitle, align: currentTextAlign, titleColor: currentTitleColor, subtitleColor: currentSubtitleColor, textSize: currentTextSize, fontFamily: currentTextFont });
+            });
 
-          // ★ 追加: 拡張機能などからデータ（コメント等）を受信したら、他の全Receiverへ転送(リレー)する
-          c.on('data', (data) => {
-            for (let i = 0; i < connections.length; i++) {
-              if (connections[i].open && connections[i] !== c) {
-                connections[i].send(data);
+            // ★ 追加: 拡張機能などからデータ（コメント等）を受信したら、他の全Receiverへ転送(リレー)する
+            c.on('data', (data) => {
+              for (let i = 0; i < connections.length; i++) {
+                if (connections[i].open && connections[i] !== c) {
+                  connections[i].send(data);
+                }
               }
-            }
+            });
+
+            c.on('close', () => { connections = connections.filter(x => x !== c); });
           });
+        } catch (e) { alert("カメラ/マイク起動失敗"); }
+      };
 
-          c.on('close', () => { connections = connections.filter(x => x !== c); }); 
-        });
-      } catch (e) { alert("カメラ/マイク起動失敗"); }
-    };
+      function animate() {
+        requestAnimationFrame(animate);
 
-function animate() {
-      requestAnimationFrame(animate);
-
-      // 1. UI・カメラ制御（軽量）
-      if (controls) {
-        const sValY = parseFloat(s_cam_y.value);
-        const sValX = parseFloat(s_cam_x.value);
-        if (Math.floor(performance.now()) % 10 === 0) {
+        // 1. UI・カメラ制御（軽量）
+        if (controls) {
+          const sValY = parseFloat(s_cam_y.value);
+          const sValX = parseFloat(s_cam_x.value);
+          if (Math.floor(performance.now()) % 10 === 0) {
             document.getElementById("v_cam_y").innerText = sValY.toFixed(2);
             document.getElementById("v_cam_x").innerText = sValX.toFixed(2);
+          }
+          if (targetCamYOffset !== 2.0) targetCamYOffset = sValY;
+          targetCamXOffset = sValX;
+
+          const diffX = (targetCamXOffset - currentCamXOffset) * 0.1;
+          currentCamXOffset += diffX;
+          currentCamYOffset += (targetCamYOffset - currentCamYOffset) * 0.1;
+
+          controls.target.x += diffX;
+          camera.position.x += diffX;
+          controls.target.y = headWorldY + currentCamYOffset;
+          controls.update();
         }
-        if (targetCamYOffset !== 2.0) targetCamYOffset = sValY;
-        targetCamXOffset = sValX;
 
-        const diffX = (targetCamXOffset - currentCamXOffset) * 0.1;
-        currentCamXOffset += diffX;
-        currentCamYOffset += (targetCamYOffset - currentCamYOffset) * 0.1;
+        // 2. マイク解析
+        if (analyser) {
+          analyser.getByteFrequencyData(dataArray);
+          currentVolume = (dataArray.reduce((a, b) => a + b, 0) / dataArray.length) / 128.0;
+          micBarFill.style.width = Math.min(100, currentVolume * 400) + "%";
+        }
 
-        if (currentVrm) currentVrm.scene.position.x = currentCamXOffset;
-        controls.target.y = headWorldY + currentCamYOffset;
-        controls.update();
-      }
+        // 3. トラッキング & VRM更新（ビデオフレーム更新時のみ）
+        if (video.readyState >= 2 && video.currentTime !== lastVideoTime) {
+          lastVideoTime = video.currentTime;
+          const res = faceLandmarker ? faceLandmarker.detectForVideo(video, performance.now()) : null;
 
-      // 2. マイク解析
-      if (analyser) {
-        analyser.getByteFrequencyData(dataArray);
-        currentVolume = (dataArray.reduce((a, b) => a + b, 0) / dataArray.length) / 128.0;
-        micBarFill.style.width = Math.min(100, currentVolume * 400) + "%";
-      }
+          if (currentVrm) {
+            const l = parseFloat(s_l.value), r = parseFloat(s_r.value), bS = parseFloat(s_blink.value), mS = parseFloat(s_mic.value);
+            document.getElementById("v_l").innerText = l; document.getElementById("v_r").innerText = r;
+            document.getElementById("v_blink").innerText = bS; document.getElementById("v_mic").innerText = mS;
 
-      // 3. トラッキング & VRM更新（ビデオフレーム更新時のみ）
-      if (video.readyState >= 2 && video.currentTime !== lastVideoTime) {
-        lastVideoTime = video.currentTime;
-        const res = faceLandmarker ? faceLandmarker.detectForVideo(video, performance.now()) : null;
+            // 送信データの基本セット
+            vData.la = l; vData.ra = r; vData.b = bS;
+            vData.camPos = [camera.position.x, camera.position.y, camera.position.z];
+            vData.camTarget = [controls.target.x, controls.target.y, controls.target.z];
 
-        if (currentVrm) {
-          const l = parseFloat(s_l.value), r = parseFloat(s_r.value), bS = parseFloat(s_blink.value), mS = parseFloat(s_mic.value);
-          document.getElementById("v_l").innerText = l; document.getElementById("v_r").innerText = r;
-          document.getElementById("v_blink").innerText = bS; document.getElementById("v_mic").innerText = mS;
+            // 腕の制御（安定版の鏡像ロジック）
+            const aL = currentVrm.humanoid.getNormalizedBoneNode("rightUpperArm");
+            const aR = currentVrm.humanoid.getNormalizedBoneNode("leftUpperArm");
+            if (aL) aL.rotation.z = THREE.MathUtils.degToRad(-l);
+            if (aR) aR.rotation.z = THREE.MathUtils.degToRad(r);
 
-          // 送信データの基本セット
-          vData.h = headWorldY + (targetCamYOffset === 2.0 ? -10 : 0);
-          vData.x = currentCamXOffset;
-          vData.la = l; vData.ra = r; vData.b = bS;
-          vData.camPos = [camera.position.x, camera.position.y, camera.position.z];
-          vData.camTarget = [controls.target.x, controls.target.y, controls.target.z];
+            const exp = currentVrm.expressionManager;
+            if (res && res.faceBlendshapes.length > 0) {
+              const categories = res.faceBlendshapes[0].categories;
+              const shapes = {}; categories.forEach(c => { shapes[c.categoryName] = c.score; });
+              const mO = Math.max(shapes.jawOpen || 0, currentVolume * mS);
 
-          // 腕の制御（安定版の鏡像ロジック）
-          const aL = currentVrm.humanoid.getNormalizedBoneNode("rightUpperArm");
-          const aR = currentVrm.humanoid.getNormalizedBoneNode("leftUpperArm");
-          if (aL) aL.rotation.z = THREE.MathUtils.degToRad(-l); 
-          if (aR) aR.rotation.z = THREE.MathUtils.degToRad(r);
-
-          const exp = currentVrm.expressionManager;
-          if (res && res.faceBlendshapes.length > 0) {
-            const categories = res.faceBlendshapes[0].categories;
-            const shapes = {}; categories.forEach(c => { shapes[c.categoryName] = c.score; });
-            const mO = Math.max(shapes.jawOpen || 0, currentVolume * mS);
-
-            // 表情更新（リセットループなし・直接上書きで軽量化）
-            if (psyncToggle.checked) {
-              if (modelHasPS) {
-                // 鏡像ウインクのクロス代入
-                categories.forEach(c => { 
+              // 表情更新（リセットループなし・直接上書きで軽量化）
+              if (psyncToggle.checked) {
+                if (modelHasPS) {
+                  // 鏡像ウインクのクロス代入
+                  categories.forEach(c => {
                     if (c.categoryName === 'eyeBlinkLeft') exp.setValue("blinkLeft", Math.min(1.0, shapes.eyeBlinkRight * bS));
                     else if (c.categoryName === 'eyeBlinkRight') exp.setValue("blinkRight", Math.min(1.0, shapes.eyeBlinkLeft * bS));
-                    else if (c.categoryName !== 'jawOpen') exp.setValue(c.categoryName, c.score); 
-                });
-                exp.setValue("aa", mO);
-              } else {
-                const mapped = mapARKitToVRM({ ...shapes, jawOpen: mO }, bS);
-                Object.keys(mapped).forEach(k => exp.setValue(k, mapped[k]));
+                    else if (c.categoryName !== 'jawOpen') exp.setValue(c.categoryName, c.score);
+                  });
+                  exp.setValue("aa", mO);
+                } else {
+                  const mapped = mapARKitToVRM({ ...shapes, jawOpen: mO }, bS);
+                  Object.keys(mapped).forEach(k => exp.setValue(k, mapped[k]));
+                }
+                vData.s = { ...shapes, jawOpen: mO };
               }
-              vData.s = { ...shapes, jawOpen: mO };
+
+              // 視線ボーン（Sender自身の表示用・鏡像クロス）
+              const lE = currentVrm.humanoid.getNormalizedBoneNode("rightEye"), rE = currentVrm.humanoid.getNormalizedBoneNode("leftEye");
+              if (lE && rE) {
+                const mp = 0.174, my = 0.122;
+                lE.rotation.set(((shapes.eyeLookDownRight || 0) - (shapes.eyeLookUpRight || 0)) * mp, -((shapes.eyeLookOutRight || 0) - (shapes.eyeLookInRight || 0)) * -my, 0);
+                rE.rotation.set(((shapes.eyeLookDownLeft || 0) - (shapes.eyeLookUpLeft || 0)) * mp, -((shapes.eyeLookInLeft || 0) - (shapes.eyeLookOutLeft || 0)) * -my, 0);
+              }
             }
 
-            // 視線ボーン（Sender自身の表示用・鏡像クロス）
-            const lE = currentVrm.humanoid.getNormalizedBoneNode("rightEye"), rE = currentVrm.humanoid.getNormalizedBoneNode("leftEye");
-            if (lE && rE) {
-              const mp = 0.174, my = 0.122;
-              lE.rotation.set(((shapes.eyeLookDownRight||0)-(shapes.eyeLookUpRight||0))*mp, -((shapes.eyeLookOutRight||0)-(shapes.eyeLookInRight||0))*-my, 0);
-              rE.rotation.set(((shapes.eyeLookDownLeft||0)-(shapes.eyeLookUpLeft||0))*mp, -((shapes.eyeLookInLeft||0)-(shapes.eyeLookOutLeft||0))*-my, 0);
+            // 頭部回転（Quaternion鏡像）
+            if (res && res.facialTransformationMatrixes.length > 0) {
+              tempMatrix.fromArray(res.facialTransformationMatrixes[0].data);
+              tempQuat1.setFromRotationMatrix(tempMatrix);
+              if (shouldResetPose) { offsetRotation.copy(tempQuat1).invert(); shouldResetPose = false; }
+              tempQuat2.multiplyQuaternions(offsetRotation, tempQuat1);
+
+              vData.r = [tempQuat2.x, -tempQuat2.y, -tempQuat2.z, tempQuat2.w];
+
+              tempQuat1.set(vData.r[0], vData.r[1], vData.r[2], vData.r[3]).normalize();
+              const halfQuat = new THREE.Quaternion().set(0, 0, 0, 1).slerp(tempQuat1, 0.5);
+              const head = currentVrm.humanoid.getNormalizedBoneNode("head"), neck = currentVrm.humanoid.getNormalizedBoneNode("neck");
+              if (head && neck) { neck.quaternion.copy(halfQuat); head.quaternion.copy(halfQuat); }
             }
+
+            // 送信（1フレームに1回）
+            for (let i = connections.length - 1; i >= 0; i--) { if (connections[i].open) connections[i].send(vData); }
+            currentVrm.update(0.016);
           }
-
-          // 頭部回転（Quaternion鏡像）
-          if (res && res.facialTransformationMatrixes.length > 0) {
-            tempMatrix.fromArray(res.facialTransformationMatrixes[0].data);
-            tempQuat1.setFromRotationMatrix(tempMatrix);
-            if (shouldResetPose) { offsetRotation.copy(tempQuat1).invert(); shouldResetPose = false; }
-            tempQuat2.multiplyQuaternions(offsetRotation, tempQuat1);
-
-            vData.r = [tempQuat2.x, -tempQuat2.y, -tempQuat2.z, tempQuat2.w];
-
-            tempQuat1.set(vData.r[0], vData.r[1], vData.r[2], vData.r[3]).normalize();
-            const halfQuat = new THREE.Quaternion().set(0, 0, 0, 1).slerp(tempQuat1, 0.5);
-            const head = currentVrm.humanoid.getNormalizedBoneNode("head"), neck = currentVrm.humanoid.getNormalizedBoneNode("neck");
-            if (head && neck) { neck.quaternion.copy(halfQuat); head.quaternion.copy(halfQuat); }
-          }
-
-          // 送信（1フレームに1回）
-          for (let i = connections.length - 1; i >= 0; i--) { if (connections[i].open) connections[i].send(vData); }
-          currentVrm.update(0.016);
         }
+        renderer.render(scene, camera);
       }
-      renderer.render(scene, camera);
-    }
 
-    const scene = new THREE.Scene(), camera = new THREE.PerspectiveCamera(30, window.innerWidth / window.innerHeight, 0.1, 20);
-    camera.position.set(0, 1.2, 1.5);
-    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
-    renderer.setSize(window.innerWidth, window.innerHeight); document.body.appendChild(renderer.domElement);
-    scene.add(camera, new THREE.DirectionalLight(0xffffff, Math.PI), new THREE.AmbientLight(0xffffff, 0.5));
-    controls = new OrbitControls(camera, renderer.domElement);
-    controls.enableDamping = true; controls.enablePan = false; controls.minDistance = 0.5; controls.maxDistance = 5.0; controls.target.set(0, 1.2, 0);
+      const scene = new THREE.Scene(), camera = new THREE.PerspectiveCamera(30, window.innerWidth / window.innerHeight, 0.1, 20);
+      camera.position.set(0, 1.2, 1.5);
+      const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+      renderer.setSize(window.innerWidth, window.innerHeight); document.body.appendChild(renderer.domElement);
+      scene.add(camera, new THREE.DirectionalLight(0xffffff, Math.PI), new THREE.AmbientLight(0xffffff, 0.5));
+      controls = new OrbitControls(camera, renderer.domElement);
+      controls.enableDamping = true; controls.enablePan = false; controls.minDistance = 0.5; controls.maxDistance = 5.0; controls.target.set(0, 1.2, 0);
 
-    controls.zoomSpeed = 0.3; 
-    window.addEventListener('resize', () => {
-      camera.aspect = window.innerWidth / window.innerHeight; camera.updateProjectionMatrix(); renderer.setSize(window.innerWidth, window.innerHeight);
-    });
-
-    async function setupTracking() {
-      const fileset = await FilesetResolver.forVisionTasks("https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.3/wasm");
-      faceLandmarker = await FaceLandmarker.createFromOptions(fileset, {
-        baseOptions: { modelAssetPath: `https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task`, delegate: "GPU" },
-        outputFaceBlendshapes: true, outputFacialTransformationMatrixes: true, runningMode: "VIDEO"
+      window.addEventListener('resize', () => {
+        camera.aspect = window.innerWidth / window.innerHeight; camera.updateProjectionMatrix(); renderer.setSize(window.innerWidth, window.innerHeight);
       });
-      animate();
-    }
-    setupTracking();
+
+      async function setupTracking() {
+        const fileset = await FilesetResolver.forVisionTasks("https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.3/wasm");
+        faceLandmarker = await FaceLandmarker.createFromOptions(fileset, {
+          baseOptions: { modelAssetPath: `https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task`, delegate: "GPU" },
+          outputFaceBlendshapes: true, outputFacialTransformationMatrixes: true, runningMode: "VIDEO"
+        });
+        animate();
+      }
+      setupTracking();
   </script>
+
 </body>
 
 </html>
