@@ -383,8 +383,8 @@
           targetCamYOffset = parseFloat(s_cam_y.value); currentCamYOffset = targetCamYOffset;
           targetCamXOffset = parseFloat(s_cam_x.value); currentCamXOffset = targetCamXOffset;
           const zPos = isVRM0 ? -1.5 : 1.5;
-          camera.position.set(currentCamXOffset, headWorldY, zPos);
-          controls.target.set(currentCamXOffset, headWorldY + targetCamYOffset, 0);
+          camera.position.set(0, headWorldY, zPos);
+          controls.target.set(0, headWorldY + targetCamYOffset, 0);
           controls.update();
         }
         modelHasPS = isPerfectSyncModel(currentVrm);
@@ -507,12 +507,12 @@
           if (targetCamYOffset !== 2.0) targetCamYOffset = sValY;
           targetCamXOffset = sValX;
 
-          const diffX = (targetCamXOffset - currentCamXOffset) * 0.1;
-          currentCamXOffset += diffX;
+          currentCamXOffset += (targetCamXOffset - currentCamXOffset) * 0.1;
           currentCamYOffset += (targetCamYOffset - currentCamYOffset) * 0.1;
 
-          controls.target.x += diffX;
-          camera.position.x += diffX;
+          // 物理的な移動をヤメて、レンズの描画枠だけを横にスライドさせる
+          const w = window.innerWidth, h = window.innerHeight;
+          camera.setViewOffset(w, h, -currentCamXOffset * w * 0.5, 0, w, h);
           controls.target.y = headWorldY + currentCamYOffset;
           controls.update();
         }
@@ -538,6 +538,7 @@
             vData.la = l; vData.ra = r; vData.b = bS;
             vData.camPos = [camera.position.x, camera.position.y, camera.position.z];
             vData.camTarget = [controls.target.x, controls.target.y, controls.target.z];
+            vData.camOffsetX = currentCamXOffset; // スライド量をReceiverへ送る
 
             // 腕の制御（安定版の鏡像ロジック）
             const aL = currentVrm.humanoid.getNormalizedBoneNode("rightUpperArm");
