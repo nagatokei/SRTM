@@ -458,6 +458,12 @@
                     if (!camera.userData.target) camera.userData.target = new THREE.Vector3().fromArray(targetData.camTarget);
                     camera.userData.target.lerp(tempVec3.fromArray(targetData.camTarget), lerp);
                     camera.lookAt(camera.userData.target);
+                    
+                    // 受信したスライド量に合わせて、レンズの描画枠をスライドさせる
+                    if (targetData.camOffsetX !== undefined) {
+                        const w = window.innerWidth, h = window.innerHeight;
+                        camera.setViewOffset(w, h, -targetData.camOffsetX * w * 0.5, 0, w, h);
+                    } else { camera.clearViewOffset(); }
                 }
                 currentVrm.scene.position.y += (targetData.h - currentVrm.scene.position.y) * lerp;
                 const ns = Math.abs(currentVrm.scene.scale.x) + ((targetData.s_scale || 1.0) - Math.abs(currentVrm.scene.scale.x)) * lerp;
