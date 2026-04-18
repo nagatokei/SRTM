@@ -246,35 +246,12 @@
             /* 8秒かけて右から左へ流れる */
             animation: flowChat 8s linear forwards;
         }
-
-        /* 草エフェクト用パーティクル */
-        @keyframes kusaFly {
-            0% {
-                transform: translateY(105vh) scale(0.5);
-                opacity: 1;
-            }
-
-            100% {
-                transform: translateY(-10vh) scale(1.5) rotate(20deg);
-                opacity: 0;
-            }
-        }
-
-        .kusa-particle {
-            position: absolute;
-            color: #7FFF00;
-            font-weight: bold;
-            font-family: 'Noto Sans JP', sans-serif;
-            text-shadow: 2px 2px 0 #005500, -2px -2px 0 #005500, 2px -2px 0 #005500, -2px 2px 0 #005500;
-            pointer-events: none;
-            z-index: 15;
-            animation: kusaFly linear forwards;
-        }
     </style>
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
 </head>
 
-<body>e_layer"></div>
+<body>
+    <div id="bg_image_layer"></div>
     <div id="ui_panel">
         <div class="panel-title">
             <span>VRM RECEIVER</span>
@@ -325,7 +302,7 @@
 
         // --- メモリ節約用: オブジェクトの事前生成 (Zero-new) ---
         const tempQuat = new THREE.Quaternion(), halfQuat = new THREE.Quaternion(), tempVec3 = new THREE.Vector3(), headPos = new THREE.Vector3();
-        let targetData = { h: 0, x: 0, la: 0, ra: 0, r: [0, 0, 0, 1], s: null, b: 1.5, s_scale: 1.0, camPos: [0, 1.4, 1.5], camTarget: [0, 1.2, 0] };
+        let targetData = { h: 0, la: 0, ra: 0, r: [0, 0, 0, 1], s: null, b: 1.5, s_scale: 1.0, camPos: [0, 1.4, 1.5], camTarget: [0, 1.2, 0] };
         const VRM_STANDARD_EXPRESSIONS = ['happy', 'angry', 'sad', 'relaxed', 'surprised', 'blinkLeft', 'blinkRight', 'aa', 'ih', 'ou', 'ee', 'oh', 'lookUp', 'lookDown', 'lookLeft', 'lookRight'];
 
         // --- 1. セキュリティ ---
@@ -334,6 +311,10 @@
         }
 
         function isSafeAndValidVrm(url) {
+            try {
+                const p = new URL(url);
+                return (p.protocol === "http:" || p.protocol === "https:") && (p.pathname.toLowerCase().endsWith(".vrm") || p.pathname.toLowerCase().endsWith(".glb"));
+            } catch (e) { return false; }
             if (!url) return false;
             const lower = url.toLowerCase();
             return lower.endsWith(".vrm") || lower.endsWith(".glb");
@@ -356,25 +337,11 @@
             return d;
         }
 
-        // --- 草エフェクト発生関数 ---
-        function spawnKusaEffect() {
-            const count = Math.floor(Math.random() * 6) + 5; // 5〜10個の草をランダムに発生させる
-            for (let i = 0; i < count; i++) {
-                const k = document.createElement('div');
-                k.className = 'kusa-particle';
-                k.innerText = Math.random() > 0.3 ? 'w' : '草'; // 70%の確率で「w」、30%で「草」
-                k.style.left = (Math.random() * 90) + 'vw'; // 横方向のランダムな位置
-                k.style.fontSize = (2 + Math.random() * 4) + 'vw'; // ランダムな大きさ
-                k.style.animationDuration = (1.5 + Math.random() * 1.5) + 's'; // 飛んでいく速度もバラバラに
-                document.body.appendChild(k);
-                setTimeout(() => k.remove(), 3500); // アニメーション終了後に削除
-            }
-        }
-
         // --- 2. 初期化 ---
         const urlParams = new URLSearchParams(window.location.search);
         const urlId = secureSanitize(urlParams.get('id')), urlVrm = secureSanitize(urlParams.get('vrm'));
         if (urlId) targetInput.value = urlId;
+
         let vrmToLoad = null;
         if (urlVrm && isSafeAndValidVrm(urlVrm)) {
             vrmToLoad = fixDirectUrl(urlVrm);
@@ -459,11 +426,6 @@
                             c.style.top = (10 + Math.random() * 70) + '%'; // 画面の縦10%〜80%の間にランダム配置
                             document.getElementById('chat_container').appendChild(c);
                             setTimeout(() => c.remove(), 8500); // アニメーション完了後にDOM削除
-
-                            // ★ キーワード検知でエフェクト発動
-                            if (data.message.match(/草|w{2,}|ｗ{2,}/i)) {
-                                spawnKusaEffect();
-                            }
                         } else {
                             targetData = data;
                         }
@@ -498,7 +460,6 @@
                     camera.lookAt(camera.userData.target);
                 }
                 currentVrm.scene.position.y += (targetData.h - currentVrm.scene.position.y) * lerp;
-                currentVrm.scene.position.x += ((targetData.x || 0) - currentVrm.scene.position.x) * lerp;
                 const ns = Math.abs(currentVrm.scene.scale.x) + ((targetData.s_scale || 1.0) - Math.abs(currentVrm.scene.scale.x)) * lerp;
                 currentVrm.scene.scale.set(ns, ns, ns);
                 const aL = currentVrm.humanoid.getNormalizedBoneNode("rightUpperArm"), aR = currentVrm.humanoid.getNormalizedBoneNode("leftUpperArm");
