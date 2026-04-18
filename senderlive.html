@@ -500,12 +500,10 @@
         if (targetCamYOffset !== 2.0) targetCamYOffset = sValY;
         targetCamXOffset = sValX;
 
-        const diffX = (targetCamXOffset - currentCamXOffset) * 0.1;
-        currentCamXOffset += diffX;
+        currentCamXOffset += (targetCamXOffset - currentCamXOffset) * 0.1;
         currentCamYOffset += (targetCamYOffset - currentCamYOffset) * 0.1;
 
-        controls.target.x += diffX;
-        camera.position.x += diffX;
+        controls.target.x = currentCamXOffset;
         controls.target.y = headWorldY + currentCamYOffset;
         controls.update();
 
