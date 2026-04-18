@@ -603,7 +603,8 @@ function animate() {
     scene.add(camera, new THREE.DirectionalLight(0xffffff, Math.PI), new THREE.AmbientLight(0xffffff, 0.5));
     controls = new OrbitControls(camera, renderer.domElement);
     controls.enableDamping = true; controls.enablePan = false; controls.minDistance = 0.5; controls.maxDistance = 5.0; controls.target.set(0, 1.2, 0);
-    controls.zoomSpeed = 0.3; 
+    controls.zoomSpeed = 0.3; // ★スクロール時のズーム速度を落として微調整しやすくする (標準は1.0)
+
     window.addEventListener('resize', () => {
       camera.aspect = window.innerWidth / window.innerHeight; camera.updateProjectionMatrix(); renderer.setSize(window.innerWidth, window.innerHeight);
     });
