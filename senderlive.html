@@ -220,6 +220,8 @@
         type="range" id="s_cam_y" min="-1.0" max="1.0" step="0.01" value="0.0"></div>
     <div class="control-group"><label>カメラ位置の調整(左右): <span class="val-disp" id="v_cam_x">0.00</span></label><input
         type="range" id="s_cam_x" min="-1.5" max="1.5" step="0.01" value="0.0"></div>
+    <div class="control-group"><label>カメラ距離の調整(前後): <span class="val-disp" id="v_cam_z">1.50</span></label><input
+        type="range" id="s_cam_z" min="0.3" max="4.0" step="0.01" value="1.5"></div>
     <div class="control-group"><label>右腕の角度: <span class="val-disp" id="v_l">0</span>°</label><input type="range"
         id="s_l" min="-90" max="90" step="1" value="-60"></div>
     <div class="control-group"><label>左腕の角度: <span class="val-disp" id="v_r">0</span>°</label><input type="range"
@@ -288,7 +290,7 @@
     const video = document.getElementById("input_video"), connStatus = document.getElementById("conn_status");
     const micBarFill = document.getElementById("mic_bar_fill"), roomIdInput = document.getElementById("room_id");
     const psyncToggle = document.getElementById("psync_mode"), modelBadge = document.getElementById("model_type_badge");
-    const s_cam_y = document.getElementById("s_cam_y"), s_cam_x = document.getElementById("s_cam_x");
+    const s_cam_y = document.getElementById("s_cam_y"), s_cam_x = document.getElementById("s_cam_x"), s_cam_z = document.getElementById("s_cam_z");
     const s_l = document.getElementById("s_l"), s_r = document.getElementById("s_r");
     const s_blink = document.getElementById("s_blink"), s_mic = document.getElementById("s_mic");
 
@@ -303,34 +305,29 @@
     let currentBgBlur = 0;
     let currentTextFont = "'Impact', 'Arial Black', sans-serif";
 
+    // --- カメラスライダー(前後)のドラッグ状態管理 ---
+    let isZDragging = false;
+    s_cam_z.addEventListener('mousedown', () => isZDragging = true);
+    s_cam_z.addEventListener('mouseup', () => isZDragging = false);
+    s_cam_z.addEventListener('touchstart', () => isZDragging = true);
+    s_cam_z.addEventListener('touchend', () => isZDragging = false);
+    s_cam_z.addEventListener('input', () => {
+      if (!controls) return;
+      const sValZ = parseFloat(s_cam_z.value);
+      const dir = new THREE.Vector3().subVectors(camera.position, controls.target).normalize();
+      camera.position.copy(controls.target).addScaledVector(dir, sValZ);
+      controls.update();
+    });
+
     // --- メモリ節約用: オブジェクトの事前生成 ---
     const offsetRotation = new THREE.Quaternion(), tempQuat1 = new THREE.Quaternion(), tempQuat2 = new THREE.Quaternion(), tempMatrix = new THREE.Matrix4();
     const vData = { h: 0, la: 0, ra: 0, b: 1.5, s: {}, r: null, s_scale: 1.0, camPos: [0, 0, 0], camTarget: [0, 0, 0] };
-    const VRM_STANDARD_EXPRESSIONS = ['happy', 'angry', 'sad', 'relaxed', 'surprised', 'blinkLeft', 'blinkRight', 'aa', 'ih', 'ou', 'ee', 'oh', 'lookUp', 'lookDown', 'lookLeft', 'lookRight'];
 
-    // --- カメラ・制御イベント ---
-    document.getElementById("btn_reset_cam").onclick = () => {
-      s_cam_y.value = 0; s_cam_x.value = 0; 
-      targetCamYOffset = 0; currentCamYOffset = 0;
-      targetCamXOffset = 0; currentCamXOffset = 0;
-      const zPos = isVRM0 ? -1.5 : 1.5;
-      camera.position.set(0, headWorldY, zPos); controls.target.set(0, headWorldY, 0); controls.update();
-    };
-    document.getElementById("btn_away").onclick = () => { targetCamYOffset = 2.0; };
-    document.getElementById("btn_back").onclick = () => { targetCamYOffset = parseFloat(s_cam_y.value); };
-
-    function isPerfectSyncModel(vrm) {
-      if (!vrm?.expressionManager) return false;
-      return ['browDownLeft', 'cheekPuff', 'noseSneerLeft'].some(n => vrm.expressionManager.getExpression(n) != null);
-    }
-
-    function mapARKitToVRM(shapes, bSense) {
+    function mapARKitToVRM(shapes, bS) {
       const get = (n) => shapes[n] || 0;
-      const mapped = {};
-      mapped.blinkLeft = Math.min(1.0, get('eyeBlinkLeft') * bSense);
-      mapped.blinkRight = Math.min(1.0, get('eyeBlinkRight') * bSense);
-      const jaw = get('jawOpen'), pucker = get('mouthPucker'), funnel = get('mouthFunnel');
-      const stretch = (get('mouthStretchLeft') + get('mouthStretchRight')) / 2, smile = (get('mouthSmileLeft') + get('mouthSmileRight')) / 2;
+      const jaw = get('jawOpen'), stretch = (get('mouthStretchLeft') + get('mouthStretchRight')) / 2, smile = (get('mouthSmileLeft') + get('mouthSmileRight')) / 2;
+      const pucker = get('mouthPucker'), funnel = get('mouthFunnel');
+      const mapped = { blinkLeft: Math.min(1.0, get('eyeBlinkLeft') * bS), blinkRight: Math.min(1.0, get('eyeBlinkRight') * bS) };
       mapped.aa = Math.min(1.0, jaw * Math.max(0.2, 1.0 - pucker - funnel));
       mapped.ih = Math.min(1.0, Math.max(stretch, smile * 0.5) * Math.max(0, 1.0 - jaw * 1.5) * 1.2);
       mapped.ou = Math.min(1.0, pucker);
@@ -342,8 +339,24 @@
       return mapped;
     }
 
-    let savedRoomId = localStorage.getItem('last_room_id') || ("vrm-" + Math.random().toString(36).substring(2, 10));
-    localStorage.setItem('last_room_id', savedRoomId);
+    function isPerfectSyncModel(vrm) { return ['browDownLeft', 'cheekPuff', 'noseSneerLeft'].some(n => vrm.expressionManager.getExpression(n)); }
+
+    // --- カメラ・制御イベント ---
+    document.getElementById("btn_reset_cam").onclick = () => {
+      s_cam_y.value = 0; s_cam_x.value = 0; s_cam_z.value = 1.5;
+      targetCamYOffset = 0; currentCamYOffset = 0;
+      targetCamXOffset = 0; currentCamXOffset = 0;
+      const zPos = isVRM0 ? -1.5 : 1.5;
+      camera.position.set(0, headWorldY, zPos); controls.target.set(0, headWorldY, 0); controls.update();
+    };
+    document.getElementById("btn_away").onclick = () => { targetCamYOffset = 2.0; };
+    document.getElementById("btn_back").onclick = () => { targetCamYOffset = parseFloat(s_cam_y.value); };
+
+    ["s_cam_y", "s_cam_x", "s_cam_z", "s_l", "s_r", "s_blink", "s_mic"].forEach(id => {
+      document.getElementById(id).oninput = e => document.getElementById("v_" + id.replace("s_", "")).innerText = parseFloat(e.target.value).toFixed(id.includes("cam") ? 2 : 1);
+    });
+
+    let savedRoomId = localStorage.getItem("last_room_id") || "vrm-" + Math.floor(Math.random() * 10000);
     roomIdInput.value = savedRoomId;
 
     document.getElementById("btn_copy").onclick = () => {
@@ -409,7 +422,7 @@
           canvas.width = w; canvas.height = h;
           const ctx = canvas.getContext("2d");
           ctx.drawImage(img, 0, 0, w, h);
-          canvas.toBlob(blob => {
+          canvas.toBlob(blob => { 
             currentBgMime = "image/jpeg";
             blob.arrayBuffer().then(buffer => {
               currentBgArrayBuffer = buffer;
@@ -496,10 +509,6 @@ function animate() {
       if (controls) {
         const sValY = parseFloat(s_cam_y.value);
         const sValX = parseFloat(s_cam_x.value);
-        if (Math.floor(performance.now()) % 10 === 0) {
-            document.getElementById("v_cam_y").innerText = sValY.toFixed(2);
-            document.getElementById("v_cam_x").innerText = sValX.toFixed(2);
-        }
         if (targetCamYOffset !== 2.0) targetCamYOffset = sValY;
         targetCamXOffset = sValX;
 
@@ -511,6 +520,15 @@ function animate() {
         camera.position.x += diffX;
         controls.target.y = headWorldY + currentCamYOffset;
         controls.update();
+
+        // ドラッグ中以外は、カメラの実際の距離をスライダーに返す
+        const dist = camera.position.distanceTo(controls.target);
+        if (!isZDragging) { s_cam_z.value = dist; }
+        if (Math.floor(performance.now()) % 10 === 0) {
+            document.getElementById("v_cam_y").innerText = sValY.toFixed(2);
+            document.getElementById("v_cam_x").innerText = sValX.toFixed(2);
+            document.getElementById("v_cam_z").innerText = dist.toFixed(2);
+        }
       }
       
       // 2. マイク解析
@@ -526,16 +544,7 @@ function animate() {
         const res = faceLandmarker ? faceLandmarker.detectForVideo(video, performance.now()) : null;
         
         if (currentVrm) {
-          const l = parseFloat(s_l.value), r = parseFloat(s_r.value), bS = parseFloat(s_blink.value), mS = parseFloat(s_mic.value);
-          document.getElementById("v_l").innerText = l; document.getElementById("v_r").innerText = r;
-          document.getElementById("v_blink").innerText = bS; document.getElementById("v_mic").innerText = mS;
-
-          // 送信データの基本セット
-          vData.la = l; vData.ra = r; vData.b = bS;
-          vData.camPos = [camera.position.x, camera.position.y, camera.position.z];
-          vData.camTarget = [controls.target.x, controls.target.y, controls.target.z];
-
-          // 腕の制御（安定版の鏡像ロジック）
+          const l = parseF // 腕の制御（安定版の鏡像ロジック）
           const aL = currentVrm.humanoid.getNormalizedBoneNode("rightUpperArm");
           const aR = currentVrm.humanoid.getNormalizedBoneNode("leftUpperArm");
           if (aL) aL.rotation.z = THREE.MathUtils.degToRad(-l); 
@@ -551,16 +560,7 @@ function animate() {
             if (psyncToggle.checked) {
               if (modelHasPS) {
                 // 鏡像ウインクのクロス代入
-                categories.forEach(c => { 
-                    if (c.categoryName === 'eyeBlinkLeft') exp.setValue("blinkLeft", Math.min(1.0, shapes.eyeBlinkRight * bS));
-                    else if (c.categoryName === 'eyeBlinkRight') exp.setValue("blinkRight", Math.min(1.0, shapes.eyeBlinkLeft * bS));
-                    else if (c.categoryName !== 'jawOpen') exp.setValue(c.categoryName, c.score); 
-                });
-                exp.setValue("aa", mO);
-              } else {
-                const mapped = mapARKitToVRM({ ...shapes, jawOpen: mO }, bS);
-                Object.keys(mapped).forEach(k => exp.setValue(k, mapped[k]));
-              }
+                categories     }
               vData.s = { ...shapes, jawOpen: mO };
             }
 
@@ -589,6 +589,8 @@ function animate() {
           }
           
           // 送信（1フレームに1回）
+          vData.camPos = camera.position.toArray();
+          vData.camTarget = controls.target.toArray();
           for (let i = connections.length - 1; i >= 0; i--) { if (connections[i].open) connections[i].send(vData); }
           currentVrm.update(0.016);
         }
@@ -602,7 +604,7 @@ function animate() {
     renderer.setSize(window.innerWidth, window.innerHeight); document.body.appendChild(renderer.domElement);
     scene.add(camera, new THREE.DirectionalLight(0xffffff, Math.PI), new THREE.AmbientLight(0xffffff, 0.5));
     controls = new OrbitControls(camera, renderer.domElement);
-    controls.enableDamping = true; controls.enablePan = false; controls.minDistance = 0.5; controls.maxDistance = 5.0; controls.target.set(0, 1.2, 0);
+    controls.enableDamping = true; controls.enablePan = false; controls.minDistance = 0.3; controls.maxDistance = 5.0; controls.target.set(0, 1.2, 0);
     controls.zoomSpeed = 0.3; // ★スクロール時のズーム速度を落として微調整しやすくする (標準は1.0)
 
     window.addEventListener('resize', () => {
