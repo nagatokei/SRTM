@@ -4,6 +4,7 @@
 <head>
   <meta charset="utf-8">
   <title>VRM Sender (OrbitControls Optimized)</title>
+  <link rel="icon" href="data:,">
   <style>
     body {
       margin: 0;
@@ -399,16 +400,25 @@
     document.getElementById("bg_file").onchange = (e) => {
       const f = e.target.files[0];
       if (f) {
-        const reader = new FileReader();
-        reader.onload = (ev) => {
-          currentBgArrayBuffer = ev.target.result;
-          currentBgMime = f.type;
-          const dataPacket = { type: 'bgImage', data: currentBgArrayBuffer, mime: currentBgMime };
-          for (let i = 0; i < connections.length; i++) {
-            if (connections[i].open) connections[i].send(dataPacket);
-          }
+        const img = new Image();
+        img.onload = () => {
+          const canvas = document.createElement("canvas");
+          let w = img.width, h = img.height;
+          const maxDim = 1280; // 配信・サムネ用ならこのサイズで十分
+          if (w > maxDim || h > maxDim) { const r = Math.min(maxDim / w, maxDim / h); w *= r; h *= r; }
+          canvas.width = w; canvas.height = h;
+          const ctx = canvas.getContext("2d");
+          ctx.drawImage(img, 0, 0, w, h);
+          canvas.toBlob(blob => {
+            currentBgMime = "image/jpeg";
+            blob.arrayBuffer().then(buffer => {
+              currentBgArrayBuffer = buffer;
+              const dataPacket = { type: 'bgImage', data: currentBgArrayBuffer, mime: currentBgMime };
+              for (let i = 0; i < connections.length; i++) { if (connections[i].open) connections[i].send(dataPacket); }
+            });
+          }, "image/jpeg", 0.8);
         };
-        reader.readAsArrayBuffer(f);
+        img.src = URL.createObjectURL(f);
       }
     };
 
@@ -464,6 +474,16 @@
             // 接続してきたReceiverに、現在のテキストオーバーレイ状態を送る
             c.send({ type: 'textOverlay', title: currentTitle, subtitle: currentSubtitle, align: currentTextAlign, titleColor: currentTitleColor, subtitleColor: currentSubtitleColor, textSize: currentTextSize, fontFamily: currentTextFont });
           }); 
+          
+          // ★ 追加: 拡張機能などからデータ（コメント等）を受信したら、他の全Receiverへ転送(リレー)する
+          c.on('data', (data) => {
+            for (let i = 0; i < connections.length; i++) {
+              if (connections[i].open && connections[i] !== c) {
+                connections[i].send(data);
+              }
+            }
+          });
+
           c.on('close', () => { connections = connections.filter(x => x !== c); }); 
         });
       } catch (e) { alert("カメラ/マイク起動失敗"); }
