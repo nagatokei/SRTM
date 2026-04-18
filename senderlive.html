@@ -220,8 +220,6 @@
         type="range" id="s_cam_y" min="-1.0" max="1.0" step="0.01" value="0.0"></div>
     <div class="control-group"><label>カメラ位置の調整(左右): <span class="val-disp" id="v_cam_x">0.00</span></label><input
         type="range" id="s_cam_x" min="-1.5" max="1.5" step="0.01" value="0.0"></div>
-    <div class="control-group"><label>カメラ距離の調整(前後): <span class="val-disp" id="v_cam_z">1.50</span></label><input
-        type="range" id="s_cam_z" min="0.3" max="4.0" step="0.01" value="1.5"></div>
     <div class="control-group"><label>右腕の角度: <span class="val-disp" id="v_l">0</span>°</label><input type="range"
         id="s_l" min="-90" max="90" step="1" value="-60"></div>
     <div class="control-group"><label>左腕の角度: <span class="val-disp" id="v_r">0</span>°</label><input type="range"
@@ -294,7 +292,7 @@
     const video = document.getElementById("input_video"), connStatus = document.getElementById("conn_status");
     const micBarFill = document.getElementById("mic_bar_fill"), roomIdInput = document.getElementById("room_id");
     const psyncToggle = document.getElementById("psync_mode"), modelBadge = document.getElementById("model_type_badge");
-    const s_cam_y = document.getElementById("s_cam_y"), s_cam_x = document.getElementById("s_cam_x"), s_cam_z = document.getElementById("s_cam_z");
+    const s_cam_y = document.getElementById("s_cam_y"), s_cam_x = document.getElementById("s_cam_x");
     const s_l = document.getElementById("s_l"), s_r = document.getElementById("s_r");
     const s_blink = document.getElementById("s_blink"), s_mic = document.getElementById("s_mic");
 
@@ -308,20 +306,6 @@
     let currentTextAlign = "flex-start", currentTitleColor = "#ffffff", currentSubtitleColor = "#ffcc00", currentTextSize = 1.0;
     let currentBgBlur = 0;
     let currentTextFont = "'Impact', 'Arial Black', sans-serif";
-
-    // --- カメラスライダー(前後)のドラッグ状態管理 ---
-    let isZDragging = false;
-    s_cam_z.addEventListener('mousedown', () => isZDragging = true);
-    s_cam_z.addEventListener('mouseup', () => isZDragging = false);
-    s_cam_z.addEventListener('touchstart', () => isZDragging = true);
-    s_cam_z.addEventListener('touchend', () => isZDragging = false);
-    s_cam_z.addEventListener('input', () => {
-      if (!controls) return;
-      const sValZ = parseFloat(s_cam_z.value);
-      const dir = new THREE.Vector3().subVectors(camera.position, controls.target).normalize();
-      camera.position.copy(controls.target).addScaledVector(dir, sValZ);
-      controls.update();
-    });
 
     // --- メモリ節約用: オブジェクトの事前生成 ---
     const offsetRotation = new THREE.Quaternion(), tempQuat1 = new THREE.Quaternion(), tempQuat2 = new THREE.Quaternion(), tempMatrix = new THREE.Matrix4();
@@ -347,7 +331,7 @@
 
     // --- カメラ・制御イベント ---
     document.getElementById("btn_reset_cam").onclick = () => {
-      s_cam_y.value = 0; s_cam_x.value = 0; s_cam_z.value = 1.5;
+      s_cam_y.value = 0; s_cam_x.value = 0;
       targetCamYOffset = 0; currentCamYOffset = 0;
       targetCamXOffset = 0; currentCamXOffset = 0;
       const zPos = isVRM0 ? -1.5 : 1.5;
@@ -356,7 +340,7 @@
     document.getElementById("btn_away").onclick = () => { targetCamYOffset = 2.0; };
     document.getElementById("btn_back").onclick = () => { targetCamYOffset = parseFloat(s_cam_y.value); };
 
-    ["s_cam_y", "s_cam_x", "s_cam_z", "s_l", "s_r", "s_blink", "s_mic"].forEach(id => {
+    ["s_cam_y", "s_cam_x", "s_l", "s_r", "s_blink", "s_mic"].forEach(id => {
       document.getElementById(id).oninput = e => document.getElementById("v_" + id.replace("s_", "")).innerText = parseFloat(e.target.value).toFixed(id.includes("cam") ? 2 : 1);
     });
 
@@ -525,13 +509,9 @@
         controls.target.y = headWorldY + currentCamYOffset;
         controls.update();
 
-        // ドラッグ中以外は、カメラの実際の距離をスライダーに返す
-        const dist = camera.position.distanceTo(controls.target);
-        if (!isZDragging) { s_cam_z.value = dist; }
         if (Math.floor(performance.now()) % 10 === 0) {
           document.getElementById("v_cam_y").innerText = sValY.toFixed(2);
           document.getElementById("v_cam_x").innerText = sValX.toFixed(2);
-          document.getElementById("v_cam_z").innerText = dist.toFixed(2);
         }
       }
 
@@ -548,7 +528,8 @@
         const res = faceLandmarker ? faceLandmarker.detectForVideo(video, performance.now()) : null;
 
         if (currentVrm) {
-          const l = parseF // 腕の制御（安定版の鏡像ロジック）
+          const l = parseFloat(s_l.value), r = parseFloat(s_r.value), mS = parseFloat(s_mic.value);
+          // 腕の制御（安定版の鏡像ロジック）
           const aL = currentVrm.humanoid.getNormalizedBoneNode("rightUpperArm");
           const aR = currentVrm.humanoid.getNormalizedBoneNode("leftUpperArm");
           if (aL) aL.rotation.z = THREE.MathUtils.degToRad(-l);
@@ -564,10 +545,20 @@
             if (psyncToggle.checked) {
               if (modelHasPS) {
                 // 鏡像ウインクのクロス代入
-                categories
+                vData.s = { ...shapes, eyeBlinkLeft: shapes.eyeBlinkRight, eyeBlinkRight: shapes.eyeBlinkLeft, jawOpen: mO };
+              } else {
+                vData.s = mapARKitToVRM(shapes, parseFloat(s_blink.value));
+                vData.s.aa = Math.max(vData.s.aa || 0, Math.min(1.0, currentVolume * mS));
               }
-              vData.s = { ...shapes, jawOpen: mO };
+            } else {
+              vData.s = null;
+              exp.setValue('aa', Math.min(1.0, currentVolume * mS));
             }
+
+            vData.h = headWorldY + (targetCamYOffset === 2.0 ? -10 : 0);
+            vData.la = l; vData.ra = r;
+            vData.s_scale = 1.0;
+            vData.b = parseFloat(s_blink.value);
 
             // 視線ボーン（Sender自身の表示用・鏡像クロス）
             const lE = currentVrm.humanoid.getNormalizedBoneNode("rightEye"), rE = currentVrm.humanoid.getNormalizedBoneNode("leftEye");
@@ -609,8 +600,7 @@
     renderer.setSize(window.innerWidth, window.innerHeight); document.body.appendChild(renderer.domElement);
     scene.add(camera, new THREE.DirectionalLight(0xffffff, Math.PI), new THREE.AmbientLight(0xffffff, 0.5));
     controls = new OrbitControls(camera, renderer.domElement);
-    controls.enableDamping = true; controls.enablePan = false; controls.minDistance = 0.3; controls.maxDistance = 5.0; controls.target.set(0, 1.2, 0);
-    controls.zoomSpeed = 0.3; // ★スクロール時のズーム速度を落として微調整しやすくする (標準は1.0)
+    controls.enableDamping = true; controls.enablePan = false; controls.minDistance = 0.5; controls.maxDistance = 5.0; controls.target.set(0, 1.2, 0);
 
     window.addEventListener('resize', () => {
       camera.aspect = window.innerWidth / window.innerHeight; camera.updateProjectionMatrix(); renderer.setSize(window.innerWidth, window.innerHeight);
