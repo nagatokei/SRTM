@@ -309,7 +309,7 @@
 
     // --- メモリ節約用: オブジェクトの事前生成 ---
     const offsetRotation = new THREE.Quaternion(), tempQuat1 = new THREE.Quaternion(), tempQuat2 = new THREE.Quaternion(), tempMatrix = new THREE.Matrix4();
-    const vData = { h: 0, la: 0, ra: 0, b: 1.5, s: {}, r: null, s_scale: 1.0, camPos: [0, 0, 0], camTarget: [0, 0, 0] };
+    const vData = { h: 0, x: 0, la: 0, ra: 0, b: 1.5, s: {}, r: null, s_scale: 1.0, camPos: [0, 0, 0], camTarget: [0, 0, 0] };
 
     function mapARKitToVRM(shapes, bS) {
       const get = (n) => shapes[n] || 0;
@@ -334,6 +334,7 @@
       s_cam_y.value = 0; s_cam_x.value = 0;
       targetCamYOffset = 0; currentCamYOffset = 0;
       targetCamXOffset = 0; currentCamXOffset = 0;
+      if (currentVrm) currentVrm.scene.position.x = 0;
       const zPos = isVRM0 ? -1.5 : 1.5;
       camera.position.set(0, headWorldY, zPos); controls.target.set(0, headWorldY, 0); controls.update();
     };
@@ -503,7 +504,10 @@
         currentCamXOffset += (targetCamXOffset - currentCamXOffset) * 0.1;
         currentCamYOffset += (targetCamYOffset - currentCamYOffset) * 0.1;
 
-        controls.target.x = currentCamXOffset;
+        if (currentVrm) {
+          currentVrm.scene.position.x = currentCamXOffset;
+        }
+
         controls.target.y = headWorldY + currentCamYOffset;
         controls.update();
 
@@ -554,6 +558,7 @@
             }
 
             vData.h = headWorldY + (targetCamYOffset === 2.0 ? -10 : 0);
+            vData.x = currentCamXOffset;
             vData.la = l; vData.ra = r;
             vData.s_scale = 1.0;
             vData.b = parseFloat(s_blink.value);
