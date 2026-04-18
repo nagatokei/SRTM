@@ -627,6 +627,13 @@
       controls.enableDamping = true; controls.enablePan = false; controls.minDistance = 0.5; controls.maxDistance = 5.0; controls.target.set(0, 1.2, 0);
       controls.zoomSpeed = 1.0; // スクロール時のズーム速度をデフォルト値に戻して滑らかにする
 
+      // マウスのドラッグ操作の割り当てを変更
+      controls.mouseButtons = {
+        LEFT: THREE.MOUSE.ROTATE,  // 左ボタンドラッグ: 回転（デフォルト）
+        MIDDLE: THREE.MOUSE.DOLLY, // 中ボタンドラッグ: ズーム（デフォルト）
+        RIGHT: THREE.MOUSE.DOLLY   // 右ボタンドラッグ: ズームを割り当て
+      };
+
       window.addEventListener('resize', () => {
         camera.aspect = window.innerWidth / window.innerHeight; camera.updateProjectionMatrix(); renderer.setSize(window.innerWidth, window.innerHeight);
       });
