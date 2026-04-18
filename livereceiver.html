@@ -47,6 +47,20 @@
             font-weight: bold; font-family: 'Impact', 'Arial Black', sans-serif;
             text-shadow: 2px 2px 0 #000, -2px -2px 0 #000, 2px -2px 0 #000, -2px 2px 0 #000, 0 6px 12px rgba(0,0,0,0.8);
         }
+        
+        /* YouTubeチャット流し込み用 */
+        #chat_container { position: absolute; top: 0; left: 0; width: 100vw; height: 100vh; pointer-events: none; overflow: hidden; z-index: 20; }
+        @keyframes flowChat {
+            from { transform: translateX(100vw); }
+            to { transform: translateX(-100%); }
+        }
+        .chat-message {
+            position: absolute; white-space: nowrap; font-size: 3vw; font-weight: bold;
+            color: white; font-family: 'Noto Sans JP', sans-serif;
+            text-shadow: 2px 2px 0 #000, -2px -2px 0 #000, 2px -2px 0 #000, -2px 2px 0 #000, 0 4px 8px rgba(0,0,0,0.8);
+            /* 8秒かけて右から左へ流れる */
+            animation: flowChat 8s linear forwards;
+        }
     </style>
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
 </head>
@@ -78,6 +92,8 @@
         <h1 id="overlay_title"></h1>
         <h2 id="overlay_subtitle"></h2>
     </div>
+    <!-- 流れるコメント用エリア -->
+    <div id="chat_container"></div>
 
     <script type="importmap">
     { "imports": {
@@ -108,10 +124,9 @@
         }
 
         function isSafeAndValidVrm(url) {
-            try {
-                const p = new URL(url);
-                return (p.protocol === "http:" || p.protocol === "https:") && (p.pathname.toLowerCase().endsWith(".vrm") || p.pathname.toLowerCase().endsWith(".glb"));
-            } catch(e) { return false; }
+            if (!url) return false;
+            const lower = url.toLowerCase();
+            return lower.endsWith(".vrm") || lower.endsWith(".glb");
         }
 
         function fixDirectUrl(url) {
@@ -180,7 +195,9 @@
         }
 
         function connectToSender() {
-            const id = targetInput.value.trim(); if (!currentVrm || !id) return;
+            const id = targetInput.value.trim(); 
+            if (!currentVrm) { alert("先にReceiver側でVRMモデルを読み込んでください！"); return; }
+            if (!id) { alert("Transmitter IDを入力してください！"); return; }
             if (peer) peer.destroy();
             peer = new Peer(); connectBtn.innerText = "CONNECTING...";
             peer.on('open', () => {
@@ -211,6 +228,13 @@
                                 document.getElementById('overlay_title').style.fontFamily = data.fontFamily;
                                 document.getElementById('overlay_subtitle').style.fontFamily = data.fontFamily;
                             }
+                        } else if (data.type === 'chatMessage') {
+                            const c = document.createElement('div');
+                            c.className = 'chat-message';
+                            c.innerHTML = `<span style="font-size:0.6em; opacity:0.8; color:#ddd;">${data.author}</span><br>${data.message}`;
+                            c.style.top = (10 + Math.random() * 70) + '%'; // 画面の縦10%〜80%の間にランダム配置
+                            document.getElementById('chat_container').appendChild(c);
+                            setTimeout(() => c.remove(), 8500); // アニメーション完了後にDOM削除
                         } else {
                             targetData = data; 
                         }
