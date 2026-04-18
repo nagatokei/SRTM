@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="utf-8">
+    <title>Browser Bridge</title>
+    <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+    <style>
+        body { font-family: system-ui, sans-serif; background: #111827; color: white; padding: 20px; margin: 0; }
+        .container { max-width: 600px; margin: 0 auto; background: #1f2933; padding: 20px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.3); }
+        h2 { margin-top: 0; color: #60a5fa; }
+        input, button { padding: 10px; border-radius: 6px; border: none; font-size: 14px; box-sizing: border-box; }
+        input { width: 70%; background: #374151; color: white; border: 1px solid #4b5563; }
+        input[type="checkbox"] { width: auto; transform: scale(1.2); margin-right: 8px; cursor: pointer; }
+        button { width: 28%; background: #0078d4; color: white; cursor: pointer; font-weight: bold; transition: 0.2s; float: right; }
+        button:hover { background: #005a9e; }
+        #log { background: #000; padding: 15px; height: 400px; overflow-y: auto; font-family: monospace; font-size: 13px; color: #a3be8c; border-radius: 6px; border: 1px solid #374151; clear: both; margin-top: 15px; }
+        .author { color: #81a1c1; font-weight: bold; }
+        .ai-author { color: #ffcc00; font-weight: bold; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h2>Browser Bridge (受信機)</h2>
+        <p style="font-size: 12px; color: #9ca3af; margin-bottom: 20px;">拡張機能からコメントをP2Pで受け取り、ローカルAPI (Ollama等) へ中継します。</p>
+        
+        <div style="margin-bottom: 15px;">
+            <label style="font-size: 12px; display: block; margin-bottom: 5px; font-weight: bold;">Bridge 待機IDを決めてください</label>
+            <input type="text" id="bridge_id" placeholder="例: my-bridge-001">
+            <button id="btn_start">待機開始</button>
+        </div>
+        
+        <hr style="border-color: #374151; margin: 15px 0; clear: both;">
+        <div style="margin-bottom: 10px; display: flex; align-items: center;">
+            <label style="cursor: pointer; display: flex; align-items: center;"><input type="checkbox" id="use_ollama" checked> OllamaでAIに返答させる</label>
+            <input type="text" id="ollama_model" value="gemma2:2b" style="width: 120px; padding: 6px; margin-left: auto;" title="Ollamaモデル名">
+        </div>
+        <div style="margin-bottom: 15px; display: flex; align-items: center;">
+            <label style="cursor: pointer; display: flex; align-items: center;"><input type="checkbox" id="use_voicevox" checked> Voicevoxで読み上げる</label>
+            <input type="number" id="vv_speaker" value="3" style="width: 60px; padding: 6px; margin-left: auto;" title="Voicevox Speaker ID (3: ずんだもん)">
+        </div>
+        <div id="status" style="color: #ffcc00; font-size: 12px; margin-bottom: 15px; font-weight: bold;">設定して待機を開始してください</div>
+        
+        <div id="log"></div>
+    </div>
+
+    <script>
+        let peer = null;
+        
+        // 前回使ったIDを復元
+        document.getElementById('bridge_id').value = localStorage.getItem('bridge_id') || "bridge-" + Math.floor(Math.random()*10000);
+
+        document.getElementById('btn_start').onclick = () => {
+            const id = document.getElementById('bridge_id').value.trim();
+            if (!id) return;
+            
+            localStorage.setItem('bridge_id', id);
+            if (peer) peer.destroy();
+            
+            peer = new Peer(id);
+            document.getElementById('status').innerText = "P2Pサーバーへ接続中...";
+            document.getElementById('status').style.color = "#ffcc00";
+            
+            peer.on('open', (pid) => {
+                document.getElementById('status').innerText = `待機中... ID: ${pid} (拡張機能にこのIDを設定してください)`;
+                document.getElementById('status').style.color = "#00ff00";
+            });
+
+            peer.on('connection', (conn) => {
+                addLog("System", "拡張機能から接続されました！");
+                conn.on('data', (data) => {
+                    if (data && data.type === 'chatMessage') {
+                        addLog(data.author, data.message);
+                        processMessage(data.author, data.message);
+                    }
+                });
+            });
+        };
+
+        function addLog(author, message) {
+            const logDiv = document.getElementById('log');
+            const nameClass = author === "System" ? "author" : (author === "AI" ? "ai-author" : "author");
+            logDiv.innerHTML += `<div style="margin-bottom: 6px;"><span class="${nameClass}">${author}:</span> ${message}</div>`;
+            logDiv.scrollTop = logDiv.scrollHeight;
+        }
+
+        async function processMessage(author, message) {
+            const useOllama = document.getElementById('use_ollama').checked;
+            const useVoicevox = document.getElementById('use_voicevox').checked;
+            let textToSpeak = message; // デフォルトは視聴者のコメントをそのまま読む
+
+            // 1. Ollama (AI) 連携
+            if (useOllama) {
+                const model = document.getElementById('ollama_model').value.trim();
+                addLog("System", "Ollama考え中...");
+                try {
+                    const res = await fetch("http://localhost:11434/api/generate", {
+                        method: "POST", headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({
+                            model: model, 
+                            prompt: `設定を入力する。\n${author}さんからのコメント: 「${message}」\nこれに対して、短く1言から2言で返信してください。`,
+                            stream: false
+                        })
+                    });
+                    const data = await res.json();
+                    textToSpeak = data.response; // AIの返答を読み上げ対象に上書き
+                    addLog("AI", textToSpeak);
+                } catch (e) { addLog("System", "Ollamaエラー: " + e.message); }
+            }
+
+            // 2. Voicevox (音声合成) 連携
+            if (useVoicevox && textToSpeak) {
+                const speakerId = document.getElementById('vv_speaker').value || 3;
+                try {
+                    const qRes = await fetch(`http://127.0.0.1:50021/audio_query?text=${encodeURIComponent(textToSpeak)}&speaker=${speakerId}`, { method: 'POST' });
+                    const sRes = await fetch(`http://127.0.0.1:50021/synthesis?speaker=${speakerId}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(await qRes.json()) });
+                    new Audio(URL.createObjectURL(await sRes.blob())).play();
+                } catch (e) { addLog("System", "Voicevoxエラー: " + e.message); }
+            }
+        }
+    </script>
+</body>
+</html>
