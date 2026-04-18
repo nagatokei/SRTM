@@ -1,88 +1,286 @@
 <!DOCTYPE html>
 <html>
+
 <head>
     <meta charset="utf-8">
     <title>VRM Receiver (Ultimate Secure & Optimized)</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@700;900&family=Noto+Sans+JP:wght@700;900&family=Shippori+Mincho:wght@700;800&display=swap" rel="stylesheet">
+    <link
+        href="https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@700;900&family=Noto+Sans+JP:wght@700;900&family=Shippori+Mincho:wght@700;800&display=swap"
+        rel="stylesheet">
     <style>
-        body { margin: 0; background: transparent; color: white; font-family: 'Segoe UI', sans-serif; overflow: hidden; width: 100vw; height: 100vh; }
-        #ui_panel { position: absolute; top: 15px; left: 15px; background: rgba(15, 15, 15, 0.95); padding: 18px; z-index: 100; border-radius: 12px; width: 280px; border: 1px solid #333; box-shadow: 0 8px 32px rgba(0, 0, 0, 0.8); transition: opacity 0.4s ease, visibility 0.4s; opacity: 0; visibility: hidden; }
-        body:hover #ui_panel { opacity: 1; visibility: visible; }
-        .panel-title { font-size: 14px; font-weight: bold; color: #0078d4; margin-bottom: 15px; display: flex; align-items: center; justify-content: space-between; }
-        .control-group { margin-bottom: 15px; }
-        label { display: block; font-size: 11px; color: #888; margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.5px; }
-        .input-wrapper { position: relative; }
-        input[type="password"] { width: 100%; padding: 8px 10px; background: #252525; color: #fff; border: 1px solid #444; border-radius: 6px; box-sizing: border-box; font-family: caption; letter-spacing: 0.2em; outline: none; }
-        .clear-btn { position: absolute; right: 8px; top: 50%; transform: translateY(-50%); cursor: pointer; color: #666; font-size: 14px; z-index: 5; }
-        .btn-main { width: 100%; padding: 12px; cursor: pointer; background: #0078d4; color: white; border: none; border-radius: 6px; font-weight: bold; transition: 0.2s; margin-top: 5px; }
-        .btn-main.online { background: #28a745; }
-        #status { font-size: 12px; color: #ffcc00; margin-top: 12px; text-align: center; font-weight: 500; min-height: 1.2em; }
-        hr { border: 0; border-top: 1px solid #333; margin: 15px 0; }
-        #model_type_badge { font-size: 10px; padding: 2px 6px; border-radius: 4px; color: #888; background: #333; }
-        .badge-ps { background: #28a745 !important; color: #fff !important; }
-        .badge-mapped { background: #ffc107 !important; color: #000 !important; }
-        .badge-vrm0 { background: #e94560 !important; color: #fff !important; }
-        .badge-vrm1 { background: #0078d4 !important; color: #fff !important; }
+        body {
+            margin: 0;
+            background: transparent;
+            color: white;
+            font-family: 'Segoe UI', sans-serif;
+            overflow: hidden;
+            width: 100vw;
+            height: 100vh;
+        }
+
+        #ui_panel {
+            position: absolute;
+            top: 15px;
+            left: 15px;
+            background: rgba(15, 15, 15, 0.95);
+            padding: 18px;
+            z-index: 100;
+            border-radius: 12px;
+            width: 280px;
+            border: 1px solid #333;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.8);
+            transition: opacity 0.4s ease, visibility 0.4s;
+            opacity: 0;
+            visibility: hidden;
+        }
+
+        body:hover #ui_panel {
+            opacity: 1;
+            visibility: visible;
+        }
+
+        .panel-title {
+            font-size: 14px;
+            font-weight: bold;
+            color: #0078d4;
+            margin-bottom: 15px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .control-group {
+            margin-bottom: 15px;
+        }
+
+        label {
+            display: block;
+            font-size: 11px;
+            color: #888;
+            margin-bottom: 6px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .input-wrapper {
+            position: relative;
+        }
+
+        input[type="password"] {
+            width: 100%;
+            padding: 8px 10px;
+            background: #252525;
+            color: #fff;
+            border: 1px solid #444;
+            border-radius: 6px;
+            box-sizing: border-box;
+            font-family: caption;
+            letter-spacing: 0.2em;
+            outline: none;
+        }
+
+        .clear-btn {
+            position: absolute;
+            right: 8px;
+            top: 50%;
+            transform: translateY(-50%);
+            cursor: pointer;
+            color: #666;
+            font-size: 14px;
+            z-index: 5;
+        }
+
+        .btn-main {
+            width: 100%;
+            padding: 12px;
+            cursor: pointer;
+            background: #0078d4;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            font-weight: bold;
+            transition: 0.2s;
+            margin-top: 5px;
+        }
+
+        .btn-main.online {
+            background: #28a745;
+        }
+
+        #status {
+            font-size: 12px;
+            color: #ffcc00;
+            margin-top: 12px;
+            text-align: center;
+            font-weight: 500;
+            min-height: 1.2em;
+        }
+
+        hr {
+            border: 0;
+            border-top: 1px solid #333;
+            margin: 15px 0;
+        }
+
+        #model_type_badge {
+            font-size: 10px;
+            padding: 2px 6px;
+            border-radius: 4px;
+            color: #888;
+            background: #333;
+        }
+
+        .badge-ps {
+            background: #28a745 !important;
+            color: #fff !important;
+        }
+
+        .badge-mapped {
+            background: #ffc107 !important;
+            color: #000 !important;
+        }
+
+        .badge-vrm0 {
+            background: #e94560 !important;
+            color: #fff !important;
+        }
+
+        .badge-vrm1 {
+            background: #0078d4 !important;
+            color: #fff !important;
+        }
 
         /* アバターのキャンバスを前面に */
-        canvas { position: absolute; top: 0; left: 0; z-index: 10; pointer-events: none; }
+        canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            z-index: 10;
+            pointer-events: none;
+        }
+
         /* 背景画像レイヤーを最背面に */
-        #bg_image_layer { position: absolute; top: -5%; left: -5%; width: 110vw; height: 110vh; z-index: 1; background-size: cover; background-position: center; pointer-events: none; }
+        #bg_image_layer {
+            position: absolute;
+            top: -5%;
+            left: -5%;
+            width: 110vw;
+            height: 110vh;
+            z-index: 1;
+            background-size: cover;
+            background-position: center;
+            pointer-events: none;
+        }
+
         /* テキストオーバーレイを背面（背景とキャンバスの間）に */
         #text_overlay {
-            position: absolute; top: 0; left: 0; width: 100vw; height: 100vh;
-            z-index: 5; display: flex; flex-direction: column; justify-content: center;
-            align-items: flex-start; text-align: left; padding: 5vw; box-sizing: border-box;
-            gap: 2vw; /* 文字が大きくなっても自動で間隔を広げる */
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            z-index: 5;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: flex-start;
+            text-align: left;
+            padding: 5vw;
+            box-sizing: border-box;
+            gap: 2vw;
+            /* 文字が大きくなっても自動で間隔を広げる */
         }
+
         #overlay_title {
-            font-size: 8vw; margin: 0; color: #ffffff; line-height: 1.1;
-            font-weight: 900; font-family: 'Impact', 'Arial Black', sans-serif;
-            text-shadow: 3px 3px 0 #000, -3px -3px 0 #000, 3px -3px 0 #000, -3px 3px 0 #000, 0 10px 20px rgba(0,0,0,0.8);
+            font-size: 8vw;
+            margin: 0;
+            color: #ffffff;
+            line-height: 1.1;
+            font-weight: 900;
+            font-family: 'Impact', 'Arial Black', sans-serif;
+            text-shadow: 3px 3px 0 #000, -3px -3px 0 #000, 3px -3px 0 #000, -3px 3px 0 #000, 0 10px 20px rgba(0, 0, 0, 0.8);
         }
+
         #overlay_subtitle {
-            font-size: 4vw; margin: 0; color: #ffcc00; line-height: 1.2;
-            font-weight: bold; font-family: 'Impact', 'Arial Black', sans-serif;
-            text-shadow: 2px 2px 0 #000, -2px -2px 0 #000, 2px -2px 0 #000, -2px 2px 0 #000, 0 6px 12px rgba(0,0,0,0.8);
+            font-size: 4vw;
+            margin: 0;
+            color: #ffcc00;
+            line-height: 1.2;
+            font-weight: bold;
+            font-family: 'Impact', 'Arial Black', sans-serif;
+            text-shadow: 2px 2px 0 #000, -2px -2px 0 #000, 2px -2px 0 #000, -2px 2px 0 #000, 0 6px 12px rgba(0, 0, 0, 0.8);
         }
-        
+
         /* YouTubeチャット流し込み用 */
-        #chat_container { position: absolute; top: 0; left: 0; width: 100vw; height: 100vh; pointer-events: none; overflow: hidden; z-index: 20; }
-        @keyframes flowChat {
-            from { transform: translateX(100vw); }
-            to { transform: translateX(-100%); }
+        #chat_container {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            pointer-events: none;
+            overflow: hidden;
+            z-index: 20;
         }
+
+        @keyframes flowChat {
+            from {
+                transform: translateX(100vw);
+            }
+
+            to {
+                transform: translateX(-100%);
+            }
+        }
+
         .chat-message {
-            position: absolute; white-space: nowrap; font-size: 3vw; font-weight: bold;
-            color: white; font-family: 'Noto Sans JP', sans-serif;
-            text-shadow: 2px 2px 0 #000, -2px -2px 0 #000, 2px -2px 0 #000, -2px 2px 0 #000, 0 4px 8px rgba(0,0,0,0.8);
+            position: absolute;
+            white-space: nowrap;
+            font-size: 3vw;
+            font-weight: bold;
+            color: white;
+            font-family: 'Noto Sans JP', sans-serif;
+            text-shadow: 2px 2px 0 #000, -2px -2px 0 #000, 2px -2px 0 #000, -2px 2px 0 #000, 0 4px 8px rgba(0, 0, 0, 0.8);
             /* 8秒かけて右から左へ流れる */
             animation: flowChat 8s linear forwards;
         }
 
         /* 草エフェクト用パーティクル */
         @keyframes kusaFly {
-            0% { transform: translateY(105vh) scale(0.5); opacity: 1; }
-            100% { transform: translateY(-10vh) scale(1.5) rotate(20deg); opacity: 0; }
+            0% {
+                transform: translateY(105vh) scale(0.5);
+                opacity: 1;
+            }
+
+            100% {
+                transform: translateY(-10vh) scale(1.5) rotate(20deg);
+                opacity: 0;
+            }
         }
+
         .kusa-particle {
-            position: absolute; color: #7FFF00; font-weight: bold; font-family: 'Noto Sans JP', sans-serif;
+            position: absolute;
+            color: #7FFF00;
+            font-weight: bold;
+            font-family: 'Noto Sans JP', sans-serif;
             text-shadow: 2px 2px 0 #005500, -2px -2px 0 #005500, 2px -2px 0 #005500, -2px 2px 0 #005500;
-            pointer-events: none; z-index: 15;
+            pointer-events: none;
+            z-index: 15;
             animation: kusaFly linear forwards;
         }
     </style>
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
 </head>
-<body>
-    <div id="bg_image_layer"></div>
+
+<body>e_layer"></div>
     <div id="ui_panel">
         <div class="panel-title">
             <span>VRM RECEIVER</span>
             <span>
-                <span id="vrm_version_badge" style="font-size:9px; padding:2px 6px; border-radius:3px; margin-right:4px;"></span>
+                <span id="vrm_version_badge"
+                    style="font-size:9px; padding:2px 6px; border-radius:3px; margin-right:4px;"></span>
                 <span id="model_type_badge">No Model</span>
             </span>
         </div>
@@ -124,11 +322,11 @@
         const connectBtn = document.getElementById("btn_connect"), modelBadge = document.getElementById("model_type_badge"), vBadge = document.getElementById('vrm_version_badge');
 
         let currentVrm, scene, camera, renderer, peer, conn, currentVrmUrl, reconnectTimer = null, modelHasPS = false, isVRM0 = false;
-        
+
         // --- メモリ節約用: オブジェクトの事前生成 (Zero-new) ---
         const tempQuat = new THREE.Quaternion(), halfQuat = new THREE.Quaternion(), tempVec3 = new THREE.Vector3(), headPos = new THREE.Vector3();
-        let targetData = { h:0, x:0, la:0, ra:0, r:[0,0,0,1], s:null, b:1.5, s_scale:1.0, camPos:[0,1.4,1.5], camTarget:[0,1.2,0] };
-        const VRM_STANDARD_EXPRESSIONS = ['happy','angry','sad','relaxed','surprised','blinkLeft','blinkRight','aa','ih','ou','ee','oh','lookUp','lookDown','lookLeft','lookRight'];
+        let targetData = { h: 0, x: 0, la: 0, ra: 0, r: [0, 0, 0, 1], s: null, b: 1.5, s_scale: 1.0, camPos: [0, 1.4, 1.5], camTarget: [0, 1.2, 0] };
+        const VRM_STANDARD_EXPRESSIONS = ['happy', 'angry', 'sad', 'relaxed', 'surprised', 'blinkLeft', 'blinkRight', 'aa', 'ih', 'ou', 'ee', 'oh', 'lookUp', 'lookDown', 'lookLeft', 'lookRight'];
 
         // --- 1. セキュリティ ---
         function secureSanitize(str) {
@@ -146,9 +344,9 @@
             let d = url;
             if (d.includes("1drv.ms")) {
                 try {
-                    const b = btoa(d).replace(/\//g,'_').replace(/\+/g,'-').replace(/=/g,'');
+                    const b = btoa(d).replace(/\//g, '_').replace(/\+/g, '-').replace(/=/g, '');
                     return `https://api.onedrive.com/v1.0/shares/u!${b}/root/content`;
-                } catch(e) { return d; }
+                } catch (e) { return d; }
             }
             if (d.includes("www.dropbox.com")) d = d.replace("www.dropbox.com", "dl.dropboxusercontent.com").replace(/\?dl=[01]/, "");
             if (d.includes("drive.google.com")) {
@@ -177,7 +375,6 @@
         const urlParams = new URLSearchParams(window.location.search);
         const urlId = secureSanitize(urlParams.get('id')), urlVrm = secureSanitize(urlParams.get('vrm'));
         if (urlId) targetInput.value = urlId;
-
         let vrmToLoad = null;
         if (urlVrm && isSafeAndValidVrm(urlVrm)) {
             vrmToLoad = fixDirectUrl(urlVrm);
@@ -190,7 +387,7 @@
         // --- 3. ロジック ---
         function mapARKitToVRM(shapes, bS) {
             const get = (n) => shapes[n] || 0;
-            const jaw = get('jawOpen'), stretch = (get('mouthStretchLeft')+get('mouthStretchRight'))/2, smile = (get('mouthSmileLeft')+get('mouthSmileRight'))/2;
+            const jaw = get('jawOpen'), stretch = (get('mouthStretchLeft') + get('mouthStretchRight')) / 2, smile = (get('mouthSmileLeft') + get('mouthSmileRight')) / 2;
             return {
                 blinkLeft: Math.min(1.0, get('eyeBlinkLeft') * bS), blinkRight: Math.min(1.0, get('eyeBlinkRight') * bS),
                 aa: Math.min(1.0, jaw * Math.max(0.2, 1.0 - get('mouthPucker') - get('mouthFunnel'))),
@@ -198,10 +395,10 @@
                 ou: Math.min(1.0, get('mouthPucker')), oh: Math.min(1.0, get('mouthFunnel')),
                 ee: Math.min(1.0, jaw * Math.max(stretch, smile * 0.3) * 2.0),
                 happy: Math.min(0.5, Math.max(0, smile - 0.25) * 0.8),
-                angry: Math.min(0.5, Math.max(0, ((get('mouthFrownLeft')+get('mouthFrownRight'))/2 * 0.6 + get('browDownLeft') * 0.4) - 0.2)),
+                angry: Math.min(0.5, Math.max(0, ((get('mouthFrownLeft') + get('mouthFrownRight')) / 2 * 0.6 + get('browDownLeft') * 0.4) - 0.2)),
                 surprised: Math.min(0.5, Math.max(0, (get('eyeWideLeft') * 0.5 + get('browInnerUp') * 0.5) - 0.15)),
-                lookUp: (get('eyeLookUpLeft')+get('eyeLookUpRight'))/2, lookDown: (get('eyeLookDownLeft')+get('eyeLookDownRight'))/2,
-                lookLeft: (get('eyeLookInLeft')+get('eyeLookOutRight'))/2, lookRight: (get('eyeLookOutLeft')+get('eyeLookInRight'))/2
+                lookUp: (get('eyeLookUpLeft') + get('eyeLookUpRight')) / 2, lookDown: (get('eyeLookDownLeft') + get('eyeLookDownRight')) / 2,
+                lookLeft: (get('eyeLookInLeft') + get('eyeLookOutRight')) / 2, lookRight: (get('eyeLookOutLeft') + get('eyeLookInRight')) / 2
             };
         }
 
@@ -209,20 +406,20 @@
             statusEl.innerText = "Loading VRM...";
             new GLTFLoader().register(p => new VRMLoaderPlugin(p)).load(url, gltf => {
                 if (currentVrm) scene.remove(currentVrm.scene);
-                currentVrm = gltf.userData.vrm; scene.add(gltf.scene); currentVrm.scene.scale.set(1,1,1);
+                currentVrm = gltf.userData.vrm; scene.add(gltf.scene); currentVrm.scene.scale.set(1, 1, 1);
                 const ext = gltf.parser?.json?.extensions;
                 isVRM0 = !!ext?.VRM; vBadge.innerText = `VRM ${isVRM0 ? '0.x' : '1.0'}`; vBadge.className = isVRM0 ? 'badge-vrm0' : 'badge-vrm1';
-                modelHasPS = ['browDownLeft','cheekPuff','noseSneerLeft'].some(n => currentVrm.expressionManager.getExpression(n));
+                modelHasPS = ['browDownLeft', 'cheekPuff', 'noseSneerLeft'].some(n => currentVrm.expressionManager.getExpression(n));
                 modelBadge.innerText = modelHasPS ? "PS対応" : "自動マッピング"; modelBadge.className = modelHasPS ? "badge-ps" : "badge-mapped";
                 const head = currentVrm.humanoid.getNormalizedBoneNode("head");
-                if (head) { head.getWorldPosition(headPos); camera.position.set(0, headPos.y, 1.5); if(!camera.userData.target) camera.userData.target = new THREE.Vector3(0, headPos.y, 0); camera.lookAt(camera.userData.target); }
+                if (head) { head.getWorldPosition(headPos); camera.position.set(0, headPos.y, 1.5); if (!camera.userData.target) camera.userData.target = new THREE.Vector3(0, headPos.y, 0); camera.lookAt(camera.userData.target); }
                 statusEl.innerText = "Model Ready"; statusEl.style.color = "#00ff00";
                 if (targetInput.value.trim() !== "") connectToSender();
             });
         }
 
         function connectToSender() {
-            const id = targetInput.value.trim(); 
+            const id = targetInput.value.trim();
             if (!currentVrm) { alert("先にReceiver側でVRMモデルを読み込んでください！"); return; }
             if (!id) { alert("Transmitter IDを入力してください！"); return; }
             if (peer) peer.destroy();
@@ -230,7 +427,7 @@
             peer.on('open', () => {
                 conn = peer.connect(id);
                 conn.on('open', () => { statusEl.innerText = "Online"; connectBtn.innerText = "CONNECTED"; connectBtn.className = "btn-main online"; if (reconnectTimer) { clearInterval(reconnectTimer); reconnectTimer = null; } });
-                conn.on('data', data => { 
+                conn.on('data', data => {
                     if (data) {
                         if (data.type === 'bgImage') {
                             const blob = new Blob([data.data], { type: data.mime });
@@ -262,15 +459,15 @@
                             c.style.top = (10 + Math.random() * 70) + '%'; // 画面の縦10%〜80%の間にランダム配置
                             document.getElementById('chat_container').appendChild(c);
                             setTimeout(() => c.remove(), 8500); // アニメーション完了後にDOM削除
-                            
+
                             // ★ キーワード検知でエフェクト発動
                             if (data.message.match(/草|w{2,}|ｗ{2,}/i)) {
                                 spawnKusaEffect();
                             }
                         } else {
-                            targetData = data; 
+                            targetData = data;
                         }
-                    } 
+                    }
                 });
                 conn.on('close', startReconnect);
             });
@@ -279,15 +476,15 @@
 
         function startReconnect() { if (!reconnectTimer) { statusEl.innerText = "Retrying..."; reconnectTimer = setInterval(connectToSender, 5000); } }
 
-        document.getElementById("vrm_file").onchange = (e) => { const f = e.target.files[0]; if (f) { if(currentVrmUrl) URL.revokeObjectURL(currentVrmUrl); currentVrmUrl = URL.createObjectURL(f); loadVRM(currentVrmUrl); } };
+        document.getElementById("vrm_file").onchange = (e) => { const f = e.target.files[0]; if (f) { if (currentVrmUrl) URL.revokeObjectURL(currentVrmUrl); currentVrmUrl = URL.createObjectURL(f); loadVRM(currentVrmUrl); } };
         connectBtn.onclick = () => { if (reconnectTimer) clearInterval(reconnectTimer); connectToSender(); };
 
         // --- 4. Render Loop ---
-        scene = new THREE.Scene(); camera = new THREE.PerspectiveCamera(30, window.innerWidth/window.innerHeight, 0.1, 20);
+        scene = new THREE.Scene(); camera = new THREE.PerspectiveCamera(30, window.innerWidth / window.innerHeight, 0.1, 20);
         renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, premultipliedAlpha: false });
         renderer.outputColorSpace = THREE.SRGBColorSpace;
-        renderer.setSize(window.innerWidth, window.innerHeight); renderer.setClearColor(0,0); document.body.appendChild(renderer.domElement);
-        const l = new THREE.DirectionalLight(0xffffff, Math.PI); l.position.set(0,0,1); camera.add(l);
+        renderer.setSize(window.innerWidth, window.innerHeight); renderer.setClearColor(0, 0); document.body.appendChild(renderer.domElement);
+        const l = new THREE.DirectionalLight(0xffffff, Math.PI); l.position.set(0, 0, 1); camera.add(l);
         scene.add(camera, new THREE.AmbientLight(0xffffff, 0.5));
 
         function animate() {
@@ -305,34 +502,34 @@
                 const ns = Math.abs(currentVrm.scene.scale.x) + ((targetData.s_scale || 1.0) - Math.abs(currentVrm.scene.scale.x)) * lerp;
                 currentVrm.scene.scale.set(ns, ns, ns);
                 const aL = currentVrm.humanoid.getNormalizedBoneNode("rightUpperArm"), aR = currentVrm.humanoid.getNormalizedBoneNode("leftUpperArm");
-                if(aL) aL.rotation.z += (THREE.MathUtils.degToRad(-targetData.la) - aL.rotation.z) * lerp;
-                if(aR) aR.rotation.z += (THREE.MathUtils.degToRad(targetData.ra) - aR.rotation.z) * lerp;
+                if (aL) aL.rotation.z += (THREE.MathUtils.degToRad(-targetData.la) - aL.rotation.z) * lerp;
+                if (aR) aR.rotation.z += (THREE.MathUtils.degToRad(targetData.ra) - aR.rotation.z) * lerp;
                 if (targetData.r) {
                     const h = currentVrm.humanoid.getNormalizedBoneNode("head"), n = currentVrm.humanoid.getNormalizedBoneNode("neck");
-                    tempQuat.fromArray(targetData.r); halfQuat.set(0,0,0,1).slerp(tempQuat, 0.5);
+                    tempQuat.fromArray(targetData.r); halfQuat.set(0, 0, 0, 1).slerp(tempQuat, 0.5);
                     if (h && n) { n.quaternion.slerp(halfQuat, lerp); h.quaternion.slerp(halfQuat, lerp); }
                 }
                 if (targetData.s) {
                     const exp = currentVrm.expressionManager, bS = targetData.b || 1.5;
                     if (modelHasPS) {
-                        const SKIP = new Set(['eyeBlinkLeft','eyeBlinkRight','eyeLookDownLeft','eyeLookDownRight','eyeLookInLeft','eyeLookInRight','eyeLookOutLeft','eyeLookOutRight','eyeLookUpLeft','eyeLookUpRight']);
+                        const SKIP = new Set(['eyeBlinkLeft', 'eyeBlinkRight', 'eyeLookDownLeft', 'eyeLookDownRight', 'eyeLookInLeft', 'eyeLookInRight', 'eyeLookOutLeft', 'eyeLookOutRight', 'eyeLookUpLeft', 'eyeLookUpRight']);
                         Object.keys(targetData.s).forEach(k => {
                             const val = targetData.s[k];
                             if (k.includes('eyeBlink')) { const vk = k.includes('Left') ? 'blinkRight' : 'blinkLeft'; exp.setValue(vk, exp.getValue(vk) + (Math.min(1.0, val * bS) - exp.getValue(vk)) * lerp); }
                             else if (k === 'jawOpen' || k === 'aa') { exp.setValue('aa', exp.getValue('aa') + (val - exp.getValue('aa')) * mouth); exp.setValue('jawOpen', exp.getValue('aa')); }
-                            else if (!SKIP.has(k)) { exp.setValue(k, (exp.getValue(k)||0) + (val - (exp.getValue(k)||0)) * lerp); }
+                            else if (!SKIP.has(k)) { exp.setValue(k, (exp.getValue(k) || 0) + (val - (exp.getValue(k) || 0)) * lerp); }
                         });
                     } else {
                         const m = mapARKitToVRM(targetData.s, bS);
-                        VRM_STANDARD_EXPRESSIONS.forEach(n => { const spd = n.length < 3 ? mouth : lerp; exp.setValue(n, (exp.getValue(n)||0) + ((m[n]||0) - (exp.getValue(n)||0)) * spd); });
+                        VRM_STANDARD_EXPRESSIONS.forEach(n => { const spd = n.length < 3 ? mouth : lerp; exp.setValue(n, (exp.getValue(n) || 0) + ((m[n] || 0) - (exp.getValue(n) || 0)) * spd); });
                     }
                     const lE = currentVrm.humanoid.getNormalizedBoneNode("leftEye"), rE = currentVrm.humanoid.getNormalizedBoneNode("rightEye");
                     if (lE && rE) {
                         const s = targetData.s, mp = 0.174, my = 0.122;
-                        lE.rotation.x += (((s.eyeLookDownLeft||0)-(s.eyeLookUpLeft||0))*mp - lE.rotation.x) * lerp;
-                        lE.rotation.y += (((s.eyeLookOutLeft||0)-(s.eyeLookInLeft||0))*-my - lE.rotation.y) * lerp;
-                        rE.rotation.x += (((s.eyeLookDownRight||0)-(s.eyeLookUpRight||0))*mp - rE.rotation.x) * lerp;
-                        rE.rotation.y += (((s.eyeLookInRight||0)-(s.eyeLookOutRight||0))*-my - rE.rotation.y) * lerp;
+                        lE.rotation.x += (((s.eyeLookDownLeft || 0) - (s.eyeLookUpLeft || 0)) * mp - lE.rotation.x) * lerp;
+                        lE.rotation.y += (((s.eyeLookOutLeft || 0) - (s.eyeLookInLeft || 0)) * -my - lE.rotation.y) * lerp;
+                        rE.rotation.x += (((s.eyeLookDownRight || 0) - (s.eyeLookUpRight || 0)) * mp - rE.rotation.x) * lerp;
+                        rE.rotation.y += (((s.eyeLookInRight || 0) - (s.eyeLookOutRight || 0)) * -my - rE.rotation.y) * lerp;
                     }
                 }
                 currentVrm.update(0.016);
@@ -340,8 +537,9 @@
             renderer.render(scene, camera);
         }
 
-        window.addEventListener('load', () => { animate(); if(vrmToLoad) loadVRM(vrmToLoad); else statusEl.innerText = "Please select VRM file"; });
-        window.addEventListener('resize', () => { camera.aspect = window.innerWidth/window.innerHeight; camera.updateProjectionMatrix(); renderer.setSize(window.innerWidth, window.innerHeight); });
+        window.addEventListener('load', () => { animate(); if (vrmToLoad) loadVRM(vrmToLoad); else statusEl.innerText = "Please select VRM file"; });
+        window.addEventListener('resize', () => { camera.aspect = window.innerWidth / window.innerHeight; camera.updateProjectionMatrix(); renderer.setSize(window.innerWidth, window.innerHeight); });
     </script>
 </body>
+
 </html>
