@@ -269,6 +269,14 @@
         </select>
       </div>
     </div>
+    <div class="control-group">
+      <label>チャットコメント設定 (Receiverに表示):</label>
+      <div style="display: flex; gap: 5px; margin-top: 5px; align-items: center;">
+        <label style="margin: 0; white-space: nowrap;">サイズ:</label>
+        <input type="range" id="s_chat_size" min="1.0" max="8.0" step="0.1" value="3.0" style="flex: 1;">
+        <input type="color" id="c_chat_color" title="チャット文字色" value="#ffffff" style="width: 30px; height: 24px; padding: 0; border: none; cursor: pointer;">
+      </div>
+    </div>
   </div>
 
   <div id="video_ui" style="display: none;"><video id="input_video" autoplay playsinline muted></video></div>
@@ -306,6 +314,8 @@
     let currentTextAlign = "flex-start", currentTitleColor = "#ffffff", currentSubtitleColor = "#ffcc00", currentTextSize = 1.0;
     let currentBgBlur = 0;
     let currentTextFont = "'Impact', 'Arial Black', sans-serif";
+    let currentChatSize = 3.0;
+    let currentChatColor = "#ffffff";
 
     // --- メモリ節約用: オブジェクトの事前生成 ---
     const offsetRotation = new THREE.Quaternion(), tempQuat1 = new THREE.Quaternion(), tempQuat2 = new THREE.Quaternion(), tempMatrix = new THREE.Matrix4();
@@ -455,6 +465,14 @@
         for (let i = 0; i < connections.length; i++) { if (connections[i].open) connections[i].send(dataPacket); }
       };
 
+      // チャットスタイルの送信
+      function sendChatStyle() {
+        const dataPacket = { type: 'chatStyle', size: currentChatSize, color: currentChatColor };
+        for (let i = 0; i < connections.length; i++) { if (connections[i].open) connections[i].send(dataPacket); }
+      }
+      document.getElementById("s_chat_size").oninput = (e) => { currentChatSize = parseFloat(e.target.value); sendChatStyle(); };
+      document.getElementById("c_chat_color").oninput = (e) => { currentChatColor = e.target.value; sendChatStyle(); };
+
       document.getElementById("btn_start").onclick = async () => {
         if (!currentVrm) return;
         try {
@@ -477,6 +495,8 @@
               c.send({ type: 'bgBlur', blur: currentBgBlur });
               // 接続してきたReceiverに、現在のテキストオーバーレイ状態を送る
               c.send({ type: 'textOverlay', title: currentTitle, subtitle: currentSubtitle, align: currentTextAlign, titleColor: currentTitleColor, subtitleColor: currentSubtitleColor, textSize: currentTextSize, fontFamily: currentTextFont });
+              // 接続してきたReceiverに、現在のチャットスタイルを送る
+              c.send({ type: 'chatStyle', size: currentChatSize, color: currentChatColor });
             });
 
             // ★ 追加: 拡張機能などからデータ（コメント等）を受信したら、他の全Receiverへ転送(リレー)する
