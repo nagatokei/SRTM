@@ -223,6 +223,8 @@
             pointer-events: none;
             overflow: hidden;
             z-index: 20;
+            --chat-size: 3vw;
+            --chat-color: #ffffff;
         }
 
         @keyframes flowChat {
@@ -238,9 +240,9 @@
         .chat-message {
             position: absolute;
             white-space: nowrap;
-            font-size: 3vw;
+            font-size: var(--chat-size);
             font-weight: bold;
-            color: white;
+            color: var(--chat-color);
             font-family: 'Noto Sans JP', sans-serif;
             text-shadow: 2px 2px 0 #000, -2px -2px 0 #000, 2px -2px 0 #000, -2px 2px 0 #000, 0 4px 8px rgba(0, 0, 0, 0.8);
             /* 8秒かけて右から左へ流れる */
@@ -419,6 +421,10 @@
                                 document.getElementById('overlay_title').style.fontFamily = data.fontFamily;
                                 document.getElementById('overlay_subtitle').style.fontFamily = data.fontFamily;
                             }
+                        } else if (data.type === 'chatStyle') {
+                            const chatContainer = document.getElementById('chat_container');
+                            if (data.size) chatContainer.style.setProperty('--chat-size', data.size + 'vw');
+                            if (data.color) chatContainer.style.setProperty('--chat-color', data.color);
                         } else if (data.type === 'chatMessage') {
                             const c = document.createElement('div');
                             c.className = 'chat-message';
@@ -482,8 +488,13 @@
                         const SKIP = new Set(['eyeBlinkLeft', 'eyeBlinkRight', 'eyeLookDownLeft', 'eyeLookDownRight', 'eyeLookInLeft', 'eyeLookInRight', 'eyeLookOutLeft', 'eyeLookOutRight', 'eyeLookUpLeft', 'eyeLookUpRight']);
                         Object.keys(targetData.s).forEach(k => {
                             const val = targetData.s[k];
-                            if (k.includes('eyeBlink')) { const vk = k.includes('Left') ? 'blinkRight' : 'blinkLeft'; exp.setValue(vk, exp.getValue(vk) + (Math.min(1.0, val * bS) - exp.getValue(vk)) * lerp); }
-                            else if (k === 'jawOpen' || k === 'aa') { exp.setValue('aa', exp.getValue('aa') + (val - exp.getValue('aa')) * mouth); exp.setValue('jawOpen', exp.getValue('aa')); }
+                            if (k.includes('eyeBlink')) { 
+                                const vk = k.includes('Left') ? 'blinkRight' : 'blinkLeft'; 
+                                exp.setValue(vk, exp.getValue(vk) + (Math.min(1.0, val * bS) - exp.getValue(vk)) * lerp); 
+                            }
+                            else if (k === 'jawOpen' || k === 'aa') { 
+                                exp.setValue('aa', exp.getValue('aa') + (val - exp.getValue('aa')) * mouth); 
+                            }
                             else if (!SKIP.has(k)) { exp.setValue(k, (exp.getValue(k) || 0) + (val - (exp.getValue(k) || 0)) * lerp); }
                         });
                     } else {
