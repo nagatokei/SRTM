@@ -107,7 +107,8 @@
       bottom: 10px;
       right: 10px;
       width: 160px;
-      opacity: 0.5;
+      opacity: 0.01;
+      pointer-events: none;
       z-index: 5;
     }
 
@@ -277,6 +278,27 @@
         <input type="color" id="c_chat_color" title="チャット文字色" value="#ffffff" style="width: 30px; height: 24px; padding: 0; border: none; cursor: pointer;">
       </div>
     </div>
+    <div class="control-group">
+      <label>ウィジェット (Receiverに表示):</label>
+      <div style="background: #222; padding: 8px; border-radius: 4px; border: 1px solid #444;">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+          <label style="margin: 0; font-weight: bold; color: #33ff33;">CLOCK</label>
+          <label style="cursor: pointer; margin: 0;"><input type="checkbox" id="c_clock_show"> 表示</label>
+        </div>
+        <div style="display: flex; gap: 5px; margin-top: 8px; align-items: center;">
+          <label style="margin: 0; white-space: nowrap; width: 40px;">サイズ</label>
+          <input type="range" id="s_clock_size" min="0.2" max="3.0" step="0.1" value="1.0" style="flex: 1;">
+        </div>
+        <div style="display: flex; gap: 5px; margin-top: 5px; align-items: center;">
+          <label style="margin: 0; white-space: nowrap; width: 40px;">位置 X</label>
+          <input type="range" id="s_clock_x" min="0" max="100" step="1" value="50" style="flex: 1;">
+        </div>
+        <div style="display: flex; gap: 5px; margin-top: 5px; align-items: center;">
+          <label style="margin: 0; white-space: nowrap; width: 40px;">位置 Y</label>
+          <input type="range" id="s_clock_y" min="0" max="100" step="1" value="10" style="flex: 1;">
+        </div>
+      </div>
+    </div>
   </div>
 
   <div id="video_ui" style="display: none;"><video id="input_video" autoplay playsinline muted></video></div>
@@ -316,6 +338,7 @@
     let currentTextFont = "'Impact', 'Arial Black', sans-serif";
     let currentChatSize = 3.0;
     let currentChatColor = "#ffffff";
+    let currentClockState = { show: false, size: 1.0, x: 50, y: 10 };
 
     // --- メモリ節約用: オブジェクトの事前生成 ---
     const offsetRotation = new THREE.Quaternion(), tempQuat1 = new THREE.Quaternion(), tempQuat2 = new THREE.Quaternion(), tempMatrix = new THREE.Matrix4();
@@ -473,12 +496,22 @@
       document.getElementById("s_chat_size").oninput = (e) => { currentChatSize = parseFloat(e.target.value); sendChatStyle(); };
       document.getElementById("c_chat_color").oninput = (e) => { currentChatColor = e.target.value; sendChatStyle(); };
 
+      // 時計ウィジェットの状態送信
+      function sendClockState() {
+        const dataPacket = { type: 'widgetClock', ...currentClockState };
+        for (let i = 0; i < connections.length; i++) { if (connections[i].open) connections[i].send(dataPacket); }
+      }
+      document.getElementById("c_clock_show").onchange = (e) => { currentClockState.show = e.target.checked; sendClockState(); };
+      document.getElementById("s_clock_size").oninput = (e) => { currentClockState.size = parseFloat(e.target.value); sendClockState(); };
+      document.getElementById("s_clock_x").oninput = (e) => { currentClockState.x = parseInt(e.target.value); sendClockState(); };
+      document.getElementById("s_clock_y").oninput = (e) => { currentClockState.y = parseInt(e.target.value); sendClockState(); };
+
       document.getElementById("btn_start").onclick = async () => {
         if (!currentVrm) return;
         try {
-          const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: { width: 640, height: 480 } });
+          const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: { width: { ideal: 1280 }, height: { ideal: 720 } } });
           video.srcObject = stream; video.play();
-          document.getElementById("video_ui").style.display = "none";
+          
           audioContext = new (window.AudioContext || window.webkitAudioContext)();
           const src = audioContext.createMediaStreamSource(stream);
           analyser = audioContext.createAnalyser(); analyser.fftSize = 256; src.connect(analyser);
@@ -497,6 +530,8 @@
               c.send({ type: 'textOverlay', title: currentTitle, subtitle: currentSubtitle, align: currentTextAlign, titleColor: currentTitleColor, subtitleColor: currentSubtitleColor, textSize: currentTextSize, fontFamily: currentTextFont });
               // 接続してきたReceiverに、現在のチャットスタイルを送る
               c.send({ type: 'chatStyle', size: currentChatSize, color: currentChatColor });
+              // 接続してきたReceiverに、現在の時計ウィジェット状態を送る
+              c.send({ type: 'widgetClock', ...currentClockState });
             });
 
             // ★ 追加: 拡張機能などからデータ（コメント等）を受信したら、他の全Receiverへ転送(リレー)する
@@ -513,9 +548,7 @@
         } catch (e) { alert("カメラ/マイク起動失敗"); }
       };
 
-      function animate() {
-        requestAnimationFrame(animate);
-
+      function runTrackingAndRender() {
         // 1. UI・カメラ制御（軽量）
         if (controls) {
           // スライダーの値を取得
@@ -638,6 +671,28 @@
         renderer.render(scene, camera);
       }
 
+      function animate() {
+        requestAnimationFrame(animate);
+        if (!document.hidden) {
+          runTrackingAndRender();
+        }
+      }
+
+      // --- 最小化・バックグラウンド時でも処理を止めないための Worker ハック ---
+      const bgWorkerBlob = new Blob([`
+        let timer = null;
+        self.onmessage = function(e) {
+          if (e.data === 'start') { timer = setInterval(() => self.postMessage('tick'), 16); } 
+          else if (e.data === 'stop') { clearInterval(timer); }
+        };
+      `], { type: 'application/javascript' });
+      const bgWorker = new Worker(URL.createObjectURL(bgWorkerBlob));
+      bgWorker.onmessage = () => { if (document.hidden) runTrackingAndRender(); };
+      document.addEventListener('visibilitychange', () => {
+        if (document.hidden) bgWorker.postMessage('start');
+        else bgWorker.postMessage('stop');
+      });
+
       const scene = new THREE.Scene(), camera = new THREE.PerspectiveCamera(30, window.innerWidth / window.innerHeight, 0.1, 20);
       camera.position.set(0, 1.2, 1.5);
       const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
@@ -658,12 +713,43 @@
         camera.aspect = window.innerWidth / window.innerHeight; camera.updateProjectionMatrix(); renderer.setSize(window.innerWidth, window.innerHeight);
       });
 
+      // --- 設定の保存・復元 ---
+      const uiSettingIds = [
+        'psync_mode', 's_cam_y', 's_cam_x', 's_l', 's_r', 's_blink', 's_mic',
+        's_bg_blur', 'i_title', 'i_subtitle', 's_text_align', 'c_title_color',
+        'c_subtitle_color', 's_text_size', 's_text_font', 's_chat_size', 'c_chat_color',
+        'c_clock_show', 's_clock_size', 's_clock_x', 's_clock_y'
+      ];
+      
+      uiSettingIds.forEach(id => {
+        const el = document.getElementById(id);
+        if (!el) return;
+        const savedVal = localStorage.getItem('vrm_sender_setting_' + id);
+        if (savedVal !== null) {
+          if (el.type === 'checkbox') el.checked = (savedVal === 'true');
+          else el.value = savedVal;
+        }
+        const saveFunc = () => localStorage.setItem('vrm_sender_setting_' + id, el.type === 'checkbox' ? el.checked : el.value);
+        el.addEventListener('input', saveFunc);
+        el.addEventListener('change', saveFunc);
+        el.dispatchEvent(new Event(el.type === 'checkbox' || el.tagName === 'SELECT' ? 'change' : 'input'));
+      });
+
       async function setupTracking() {
+        connStatus.innerText = "トラッキングAI 読込中...";
+        connStatus.style.color = "#ffcc00";
+        
         const fileset = await FilesetResolver.forVisionTasks("https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.3/wasm");
         faceLandmarker = await FaceLandmarker.createFromOptions(fileset, {
           baseOptions: { modelAssetPath: `https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task`, delegate: "GPU" },
           outputFaceBlendshapes: true, outputFacialTransformationMatrixes: true, runningMode: "VIDEO"
         });
+        
+        if (currentVrm) {
+          connStatus.innerText = "VRM準備OK"; connStatus.style.color = "#00ff00";
+        } else {
+          connStatus.innerText = "VRMを選択してください"; connStatus.style.color = "#ffcc00";
+        }
         animate();
       }
       setupTracking();
